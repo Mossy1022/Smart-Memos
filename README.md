@@ -1,6 +1,6 @@
 # Smart Transcriptions v1.0
 
-Welcome to the Smart Transcriptions Plugin! This plugin integrates seamlessly with your Obsidian vault, offering an advanced, interactive way to transcribe and generate notes from your audio files. My goal is to enhance your ability to capture and understand information from audio sources, transforming the way you interact with and understand your information.
+Welcome to the Smart Transcriptions Plugin! This plugin integrates seamlessly with your Obsidian, offering an advanced, interactive way to transcribe and generate notes from your audio files. My goal is to enhance your ability to capture and understand information from audio sources, transforming the way you interact with and understand your information.
 
 ## Features
 - **Audio Transcription**: Transcribe audio files into text using advanced AI models.
@@ -17,8 +17,9 @@ Getting started with the Smart Transcriptions Plugin is easy. Follow these steps
 ## Usage
 Once installed, the Smart Transcriptions Plugin provides an intuitive interface to transcribe your audio files and generate notes.
 
-- **Transcribing Audio**: To transcribe an audio file, use the command `Smart transcribe` from the command palette. The plugin will transcribe the audio file and generate detailed notes.
+- **Transcribing Audio**: To transcribe an audio file after it's been imported or directly spoken into a note, move your cursor right underneath the audio file and use the command `Smart transcribe` from the command palette (Ctrl + p for Windows and Cmd + p for Mac). The plugin will transcribe the audio file and generate detailed notes.
 - **Customizing the Prompt**: You can customize the prompt that will be sent to the AI model before adding your transcribed audio in the plugin settings.
+- **Direct Audio input**: You record audio from your microphone directly in obsidian through the "Audio Recorder" core plugin that should be filled on by default.  You can find the mic icon ribbon in your left toolbar menu
 
 ## Vision
 The Smart Transcriptions plugin aims to revolutionize the way we capture and understand information from audio sources. By leveraging advanced AI models, the plugin can transcribe audio files and generate detailed notes, freeing you from the tedious task of manual transcription and note-taking.
