@@ -41,8 +41,6 @@ Your involvement is crucial to the evolution of Smart Transcriptions. From troub
   - Contribute: Help develop the plugin, report issues, or suggest new features.
   - User Testimonials: Share how the plugin has impacted your workflow and creativity.
 
-## Acknowledgements
-Special thanks to Brian, the developer behind Smart Connections.
 
 ## License
 The Smart Transcriptions Plugin is open-source and available under the MIT License. Contributions are welcome!
