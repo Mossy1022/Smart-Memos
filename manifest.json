@@ -1,0 +1,12 @@
+{
+	"id": "smart-transcriptions",
+	"name": "Smart Transcriptions",
+	"version": "1.0.2",
+	"minAppVersion": "0.15.0",
+	"description": "Create personalized and intelligent analysis, summaries, and more for audio recordings that can be imported or spoken directly into a note",
+	"author": "Evan Moscoso",
+	"authorUrl": "https://github.com/mossy1022",
+	"fundingUrl": "https://buymeacoffee.com/evansoasis",
+	"isDesktopOnly": true
+}
+
