@@ -17,7 +17,7 @@ Getting started with the Smart Transcriptions Plugin is easy. Follow these steps
 ## Usage
 Once installed, the Smart Transcriptions Plugin provides an intuitive interface to transcribe your audio files and generate notes.
 
-- **Transcribing Audio**: To transcribe an audio file after it's been imported or directly spoken into a note, move your cursor right underneath the audio file and use the command `Smart transcribe` from the command palette (Ctrl + p for Windows and Cmd + p for Mac). The plugin will transcribe the audio file and generate detailed notes.
+- **Transcribing Audio**: To transcribe an audio file after it's been imported or directly spoken into a note, move your cursor right underneath the audio file and use the command `Smart transcribe` from the command palette (Ctrl + p for Windows and Cmd + p for Mac). The plugin will transcribe the audio file and generate detailed notes. (Note:  Current limit I've seen is around 20-25 minutes.  Will update for longer)
 - **Customizing the Prompt**: You can customize the prompt that will be sent to the AI model before adding your transcribed audio in the plugin settings.
 - **Direct Audio input**: You record audio from your microphone directly in obsidian through the "Audio Recorder" core plugin that should be filled on by default.  You can find the mic icon ribbon in your left toolbar menu
 
