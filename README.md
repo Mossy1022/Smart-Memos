@@ -14,7 +14,7 @@ Getting started with the Smart Transcriptions Plugin is easy. Follow these steps
 1. Download and install the Smart Transcriptions Plugin from the Obsidian Community Plugins.
 2. Configure the plugin settings with your OpenAI API Key and preferred AI model.
 
-Note* This plugin currently uses openAI models to recieve and transcribe your voice memos.  Looking to add Local AI Models next.
+Note* This plugin currently uses openAI models to recieve and transcribe your voice memos.  Looking to add Local AI Models in the nearer future.
 
 ## Usage
 Once installed, the Smart Transcriptions Plugin provides an intuitive interface to transcribe your audio files and generate notes.
