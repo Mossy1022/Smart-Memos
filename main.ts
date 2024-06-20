@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, normalizePath, Notice, Plugin, PluginSettingTab, requestUrl,  RequestUrlParam, Setting, TAbstractFile } from 'obsidian';
+import { App, Editor, MarkdownView, normalizePath, Notice, Plugin, PluginSettingTab, requestUrl,  RequestUrlParam, Setting, TAbstractFile, TFile } from 'obsidian';
 
 interface AudioPluginSettings {
 	model: string;
@@ -108,7 +108,7 @@ export default class SmartTranscriptionsPlugin extends Plugin {
 							// const selectedText = editor.getSelection();
 							this.transcript = result;
 							const prompt = this.settings.prompt + result;
-							new Notice('Transcript Generated... Reformatting');
+							new Notice('Transcript generated... reformatting');
 							this.generateText(prompt, editor , editor.getCursor('to').line);
                         }).catch(error => {
                             console.warn(error.message);
@@ -173,24 +173,27 @@ export default class SmartTranscriptionsPlugin extends Plugin {
         else throw new Error('Error. ' + JSON.stringify(response.json));
     }
 
-	async getAttachmentDir() {
-        const activeFile = this.app.workspace.getActiveFile();
-        if (!activeFile) throw new Error('No active file');
-        const dir = this.app.vault.adapter.getResourcePath(activeFile.path).replace(activeFile.path, '');
+	async getAttachmentDir(filenameOfAttachment: string) {
+        const currentFile = this.app.workspace.getActiveFile();
+        if (!currentFile) {
+            throw new Error('No active file');
+        }
+        const dir = this.app.fileManager.getAvailablePathForAttachment(filenameOfAttachment, currentFile.path);
         return dir;
     }
 
 	async findFilePath(text: string, regex: RegExp[]) {
-        const fullPath = await this.getAttachmentDir().then((attachmentPath) => {
-            let filename = '';
-            let result: RegExpExecArray | null;
-            for (const reg of regex) {
-                while ((result = reg.exec(text)) !== null) {
-                    filename = normalizePath(decodeURI(result[0])).trim();
-                }
+        let filename = '';
+        let result: RegExpExecArray | null;
+        for (const reg of regex) {
+            while ((result = reg.exec(text)) !== null) {
+                filename = normalizePath(decodeURI(result[0])).trim();
             }
+        }
 
             if (filename == '') throw new Error('No file found in the text.');
+
+            const fullPath = await this.getAttachmentDir(filename).then((attachmentPath) => {
 
             const fileInSpecificFolder = filename.contains('/');
             const AttInRootFolder = attachmentPath === '' || attachmentPath === '/';
@@ -212,16 +215,12 @@ export default class SmartTranscriptionsPlugin extends Plugin {
             const exists = this.app.vault.getAbstractFileByPath(fullPath) instanceof TAbstractFile;
             if (exists) return fullPath;
             else {
-                let path = '';
-                let found = false;
-                this.app.vault.getFiles().forEach((file) => {
-                    if (file.name === filename) {
-                        path = file.path;
-                        found = true;
-                    }
-                });
-                if (found) return path;
-                else throw new Error('File not found');
+                const file = this.app.vault.getAbstractFileByPath(filename);
+                if (file instanceof TFile) {
+                    return file.path;
+                } else {
+                    throw new Error('File not found');
+                }
             }
         });
         return fullPath as string;
@@ -365,10 +364,8 @@ class SmartTranscriptionsSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Smart Transcription Settings'});
-
 		new Setting(containerEl)
-			.setName('OpenAI API Key')
+			.setName('OpenAI api key')
 			.setDesc('Ex: sk-as123mkqwenjasdasdj12...')
 			.addText(text => text
 				.setPlaceholder('YOUR API KEY')
@@ -396,7 +393,7 @@ class SmartTranscriptionsSettingTab extends PluginSettingTab {
 			});
 
         new Setting(containerEl)
-			.setName('Custom Transcription-To-Notes Prompt')
+			.setName('Custom transcription-to-notes prompt')
 			.setDesc('Prompt that will be sent to Chatpgt right before adding your transcribed audio')
 			.addTextArea(text => {
 				if (text.inputEl) {
