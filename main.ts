@@ -8,7 +8,7 @@ interface AudioPluginSettings {
 
 let DEFAULT_SETTINGS: AudioPluginSettings = {
 	model: 'gpt-4',
-    apiKey: 'sk-Test',
+    apiKey: 'sk-as123mkqwenjasdasdj12...',
 	prompt: 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes in markdown language on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention \"the speaker\" anywhere in your response.  The notes your write should be written as if I were writting them. Finally, ensure to end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n'
 }
 
@@ -49,7 +49,7 @@ export default class SmartTranscriptionsPlugin extends Plugin {
 	writing: boolean;
 	transcript: string;
 
-	apiKey: string = 'sk-Test';
+	apiKey: string = 'sk-as123mkqwenjasdasdj12...';
     model: string = 'gpt-3.5-turbo-16k';
 
 	async onload() {
@@ -65,7 +65,7 @@ export default class SmartTranscriptionsPlugin extends Plugin {
             }
 		});
 
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new SmartTranscriptionsSettingTab(this.app, this));
 		
 	}
 
@@ -273,7 +273,8 @@ export default class SmartTranscriptionsPlugin extends Plugin {
 
 		new Notice(`Starting reformat`);
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const options: RequestUrlParam = {
+            url: 'https://api.openai.com/v1/chat/completions',
             method: 'POST',
             body: body,
             headers: {
@@ -281,67 +282,61 @@ export default class SmartTranscriptionsPlugin extends Plugin {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' +  this.settings.apiKey,
             },
-        });
+        };
         
-        if (!response.ok) {
-            const errorResponse = await response.json();
-            const errorMessage = errorResponse && errorResponse.error.message ? errorResponse.error.message : response.statusText;
-			new Notice(`Error. ${errorMessage}`);
+        const response = await requestUrl(options);
+        
+        if (response.status !== 200) {
+            const errorResponse = JSON.parse(response.text);
+            const errorMessage = errorResponse && errorResponse.error.message ? errorResponse.error.message : "Error";
+            new Notice(`Error. ${errorMessage}`);
             throw new Error(`Error. ${errorMessage}`);
         } else {
-			new Notice(`Should work`);
-		}
-
-        const reader = response.body?.getReader();
-        if (!reader) {
-            throw new Error('No response body reader available');
+            new Notice(`Should work`);
         }
-
+                
+        // Assuming the responseBody is an array of data
+        const data = response.text.split('\n');
+        
         let LnToWrite = this.getNextNewLine(editor, currentLn);
         editor.setLine(LnToWrite++, '\n');
         let end = false;
         let buffer = '';
-        while (!end) {
-            const { done, value } = await reader.read();
-            end = done;
-            const chunk = new TextDecoder().decode(value);
-            const data = chunk.split('\n');
-
-            for (const datum of data) {
-                if (datum.trim() === 'data: [DONE]') {
-                    end = true;
-                    break;
-                }
-                if (datum.startsWith('data:')) {
-                    const json = JSON.parse(datum.substring(6));
-                    if ('error' in json) throw new Error('Error: ' + json.error.message);
-                    if (!('choices' in json)) throw new Error('Error: ' + JSON.stringify(json));
-                    if ('content' in json.choices[0].delta) {
-                        const text = json.choices[0].delta.content;
-                        if (buffer.length < 1) buffer += text.trim();
-                        if (buffer.length > 0) {
-                            const lines = text.split('\n');
-                            if (lines.length > 1) {
-                                for (const word of lines) {
-                                    editor.setLine(LnToWrite, editor.getLine(LnToWrite++) + word + '\n');
-                                }
-                            } else {
-                                editor.setLine(LnToWrite, editor.getLine(LnToWrite) + text);
+        
+        for (const datum of data) {
+            if (datum.trim() === 'data: [DONE]') {
+                end = true;
+                break;
+            }
+            if (datum.startsWith('data:')) {
+                const json = JSON.parse(datum.substring(6));
+                if ('error' in json) throw new Error('Error: ' + json.error.message);
+                if (!('choices' in json)) throw new Error('Error: ' + JSON.stringify(json));
+                if ('content' in json.choices[0].delta) {
+                    const text = json.choices[0].delta.content;
+                    if (buffer.length < 1) buffer += text.trim();
+                    if (buffer.length > 0) {
+                        const lines = text.split('\n');
+                        if (lines.length > 1) {
+                            for (const word of lines) {
+                                editor.setLine(LnToWrite, editor.getLine(LnToWrite++) + word + '\n');
                             }
+                        } else {
+                            editor.setLine(LnToWrite, editor.getLine(LnToWrite) + text);
                         }
                     }
                 }
             }
         }
         editor.setLine(LnToWrite, editor.getLine(LnToWrite) + '\n');
-
-		// Add the raw transcript at the end
-		if (this.transcript) {
-			editor.setLine(LnToWrite++, '# Transcript');
-			editor.setLine(LnToWrite++, this.transcript);
-		}
-
-		this.writing = false;
+        
+        // Add the raw transcript at the end
+        if (this.transcript) {
+            editor.setLine(LnToWrite++, '# Transcript');
+            editor.setLine(LnToWrite++, this.transcript);
+        }
+        
+        this.writing = false;
     }
 
 	async loadSettings() {
@@ -354,7 +349,7 @@ export default class SmartTranscriptionsPlugin extends Plugin {
 }
 
 
-class SampleSettingTab extends PluginSettingTab {
+class SmartTranscriptionsSettingTab extends PluginSettingTab {
 	plugin: SmartTranscriptionsPlugin;
 
 	constructor(app: App, plugin: SmartTranscriptionsPlugin) {
@@ -374,7 +369,7 @@ class SampleSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('OpenAI API Key')
-			.setDesc('Ex: sk-Test')
+			.setDesc('Ex: sk-as123mkqwenjasdasdj12...')
 			.addText(text => text
 				.setPlaceholder('YOUR API KEY')
 				.setValue(this.plugin.settings.apiKey)
