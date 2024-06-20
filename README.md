@@ -5,7 +5,7 @@ Welcome to the Smart Transcriptions Plugin! This plugin integrates seamlessly wi
 ## Features
 - **Audio Transcription**: Transcribe audio files into text using advanced AI models.
 - **Note Generation**: Generate detailed notes in markdown language from the transcribed audio.
-- **Customizable Prompts**: Customize the prompt that will be sent to the AI model before adding your transcribed audio.
+- **Customizable Prompts**: Customize the prompt that will be sent to the AI model before adding your transcribed audio so you can get any kind of analysis or enhancements you want.
 - **Support for Multiple Audio Formats**: Supports mp3, mp4, mpeg, mpga, m4a, wav, webm audio formats.
 
 ## Installation
