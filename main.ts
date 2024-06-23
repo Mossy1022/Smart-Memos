@@ -8,7 +8,7 @@ interface AudioPluginSettings {
 
 let DEFAULT_SETTINGS: AudioPluginSettings = {
 	model: 'gpt-4',
-    apiKey: 'sk-as123mkqwenjasdasdj12...',
+    apiKey: '',
 	prompt: 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes in markdown language on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention \"the speaker\" anywhere in your response.  The notes your write should be written as if I were writting them. Finally, ensure to end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n'
 }
 
@@ -368,7 +368,7 @@ class SmartMemosSettingTab extends PluginSettingTab {
 			.setName('OpenAI api key')
 			.setDesc('Ex: sk-as123mkqwenjasdasdj12...')
 			.addText(text => text
-				.setPlaceholder('YOUR API KEY')
+				.setPlaceholder(DEFAULT_SETTINGS.apiKey)
 				.setValue(this.plugin.settings.apiKey)
 				.onChange(async (value) => {
 					// console.log('API Key: ' + value);
