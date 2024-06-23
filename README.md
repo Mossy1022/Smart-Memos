@@ -29,7 +29,7 @@ The Smart Memos plugin aims to revolutionize the way we capture and understand i
 The ultimate mission is to enhance productivity, ideas, and efficiency in note-taking, especially for users who frequently deal with audio sources of information or find it much easier to simply speak whatever is on their mind than write it all down. With this plugin, I envision a future where valuable information from audio sources doesn't get lost and is automatically integrated into your own, personalized way of note-taking.
 
 ## About Me
-Hello there! Name's Evan :D
+Hello there! Name's Evan 😁
 
 I'm a senior software developer/architect consultant, currently managing and developing data visualization tools for the CDC. I've been obsessed about what's transpiring with AI for the last 12-ish years, fully aware that it would soon completely change the world.
 
