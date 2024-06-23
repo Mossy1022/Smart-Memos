@@ -44,7 +44,7 @@ const MODELS: string[] = [
 ];
   
 
-export default class SmartTranscriptionsPlugin extends Plugin {
+export default class SmartMemosPlugin extends Plugin {
 	settings: AudioPluginSettings;
 	writing: boolean;
 	transcript: string;
@@ -65,7 +65,7 @@ export default class SmartTranscriptionsPlugin extends Plugin {
             }
 		});
 
-		this.addSettingTab(new SmartTranscriptionsSettingTab(this.app, this));
+		this.addSettingTab(new SmartMemosSettingTab(this.app, this));
 		
 	}
 
@@ -348,10 +348,10 @@ export default class SmartTranscriptionsPlugin extends Plugin {
 }
 
 
-class SmartTranscriptionsSettingTab extends PluginSettingTab {
-	plugin: SmartTranscriptionsPlugin;
+class SmartMemosSettingTab extends PluginSettingTab {
+	plugin: SmartMemosPlugin;
 
-	constructor(app: App, plugin: SmartTranscriptionsPlugin) {
+	constructor(app: App, plugin: SmartMemosPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 

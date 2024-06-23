@@ -1,6 +1,6 @@
 {
-	"name": "smart-transcriptions",
-	"version": "1.0.3",
+	"name": "smart-memos",
+	"version": "1.0.4",
 	"description": "Create personalized and intelligent analysis, summaries, and more for audio recordings that can be imported or spoken directly into a note",
 	"main": "main.js",
 	"scripts": {
