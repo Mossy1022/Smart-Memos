@@ -16,6 +16,11 @@ Getting started with the Smart Memos Plugin is easy. Follow these steps to insta
 
 Note* This plugin currently uses online openAI models to recieve and transcribe your voice memos.  Looking to add Local AI Models in the nearer future.
 
+## Platforms
+
+- Desktop
+- Mobile (Android only) - Apple had their own audio format that makes everyone's lives more difficult.  Will try to get around this without needing to use another library.
+
 ## Usage
 Once installed, the Smart Memos Plugin provides an intuitive interface to transcribe your audio files and generate notes.
 
