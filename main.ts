@@ -1,4 +1,6 @@
 import { App, Editor, MarkdownView, normalizePath, Notice, Plugin, PluginSettingTab, requestUrl,  RequestUrlParam, Setting, TAbstractFile, TFile } from 'obsidian';
+const {SmartChatModel} = require('smart-chat-model');
+
 
 interface AudioPluginSettings {
 	model: string;
@@ -182,96 +184,98 @@ export default class SmartMemosPlugin extends Plugin {
 			prompt = prompt.substring(prompt.length - (TOKEN_LIMITS[this.settings.model] + 300));
 		}
 
-		// console.log('prompt: ', prompt);
-
 		prompt = prompt + '.';
 
         let newPrompt = prompt;
 
         const messages = [];
 
-        // messages.push({
-		// 	role: 'system',
-		// 	content: contextPrompt,
-		// });
-
         messages.push({
             role: 'user',
             content: newPrompt,
         });
 
-        const body = JSON.stringify({
-            model: this.settings.model,
-            messages: messages,
-            stream: true
-        });
-
-		// console.log('messages: ', messages);
-
 		new Notice(`Performing customized superhuman analysis...`);
 
-        const options: RequestUrlParam = {
-            url: 'https://api.openai.com/v1/chat/completions',
-            method: 'POST',
-            body: body,
-            headers: {
-                'Accept': 'text/event-stream',
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' +  this.settings.apiKey,
-            },
-        };
-        
-        const response = await requestUrl(options);
-        
-        if (response.status !== 200) {
-            const errorResponse = JSON.parse(response.text);
-            const errorMessage = errorResponse && errorResponse.error.message ? errorResponse.error.message : "Error";
-            new Notice(`Error. ${errorMessage}`);
-            throw new Error(`Error. ${errorMessage}`);
-        } else {
-            new Notice(`Superhuman analysis complete!`);
-        }
-                
-        // Assuming the responseBody is an array of data
-        const data = response.text.split('\n');
-        
         let LnToWrite = this.getNextNewLine(editor, currentLn);
-        editor.setLine(LnToWrite++, '\n');
-        let end = false;
-        let buffer = '';
-        
-        for (const datum of data) {
-            if (datum.trim() === 'data: [DONE]') {
-                end = true;
-                break;
-            }
-            if (datum.startsWith('data:')) {
-                const json = JSON.parse(datum.substring(6));
-                if ('error' in json) throw new Error('Error: ' + json.error.message);
-                if (!('choices' in json)) throw new Error('Error: ' + JSON.stringify(json));
-                if ('content' in json.choices[0].delta) {
-                    const text = json.choices[0].delta.content;
-                    if (buffer.length < 1) buffer += text.trim();
-                    if (buffer.length > 0) {
-                        const lines = text.split('\n');
-                        if (lines.length > 1) {
-                            for (const word of lines) {
-                                editor.setLine(LnToWrite, editor.getLine(LnToWrite++) + word + '\n');
-                            }
-                        } else {
-                            editor.setLine(LnToWrite, editor.getLine(LnToWrite) + text);
-                        }
-                    }
+        let lastLine = LnToWrite;
+        const mock_env = {
+            chunk_handler: (chunk: string) => {
+                editor.setLine(LnToWrite, editor.getLine(LnToWrite) + chunk);
+                if(chunk.includes('\n')){
+                    LnToWrite = this.getNextNewLine(editor, LnToWrite);
+                }
+            },
+            done_handler: (final_resp: string) => {
+                LnToWrite = this.getNextNewLine(editor, lastLine);
+                if(this.settings.includeTranscript) {
+                    editor.setLine(LnToWrite, editor.getLine(LnToWrite) + '\n# Transcript\n' + this.transcript);
                 }
             }
-        }
-        editor.setLine(LnToWrite, editor.getLine(LnToWrite) + '\n');
+        };
+        const smart_chat_model = new SmartChatModel(
+            mock_env,
+            "openai",
+            {
+                api_key: this.settings.apiKey,
+                model: this.settings.model,
+            }
+        );
+        const resp = await smart_chat_model.complete({messages: messages});
+        console.log('resp: ', resp);
+        // editor.setLine(LnToWrite, editor.getLine(LnToWrite) + resp);
         
-        // Add the raw transcript at the end
-        if (this.settings.includeTranscript) {
-            editor.setLine(LnToWrite++, '# Transcript');
-            editor.setLine(LnToWrite++, this.transcript);
-        }
+        // const response = await requestUrl(options);
+        
+        // if (response.status !== 200) {
+        //     const errorResponse = JSON.parse(response.text);
+        //     const errorMessage = errorResponse && errorResponse.error.message ? errorResponse.error.message : "Error";
+        //     new Notice(`Error. ${errorMessage}`);
+        //     throw new Error(`Error. ${errorMessage}`);
+        // } else {
+        //     new Notice(`Superhuman analysis complete!`);
+        // }
+                
+        // // Assuming the responseBody is an array of data
+        // const data = response.text.split('\n');
+        
+        // let LnToWrite = this.getNextNewLine(editor, currentLn);
+        // editor.setLine(LnToWrite++, '\n');
+        // let end = false;
+        // let buffer = '';
+        
+        // for (const datum of data) {
+        //     if (datum.trim() === 'data: [DONE]') {
+        //         end = true;
+        //         break;
+        //     }
+        //     if (datum.startsWith('data:')) {
+        //         const json = JSON.parse(datum.substring(6));
+        //         if ('error' in json) throw new Error('Error: ' + json.error.message);
+        //         if (!('choices' in json)) throw new Error('Error: ' + JSON.stringify(json));
+        //         if ('content' in json.choices[0].delta) {
+        //             const text = json.choices[0].delta.content;
+        //             if (buffer.length < 1) buffer += text.trim();
+        //             if (buffer.length > 0) {
+        //                 const lines = text.split('\n');
+        //                 if (lines.length > 1) {
+        //                     for (const word of lines) {
+        //                         editor.setLine(LnToWrite, editor.getLine(LnToWrite++) + word + '\n');
+        //                     }
+        //                 } else {
+        //                     editor.setLine(LnToWrite, editor.getLine(LnToWrite) + text);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+        // editor.setLine(LnToWrite, editor.getLine(LnToWrite) + '\n');
+        
+        // // Add the raw transcript at the end
+        // if (this.transcript) {
+        //     editor.setLine(LnToWrite++, '# Transcript');
+        //     editor.setLine(LnToWrite++, this.transcript);
+        // }
         
         this.writing = false;
     }
