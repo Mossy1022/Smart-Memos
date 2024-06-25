@@ -124,7 +124,7 @@ export default class SmartMemosPlugin extends Plugin {
 
 	async generateTranscript(audioBuffer: ArrayBuffer, filetype: string) {
         if (this.settings.apiKey.length <= 1) throw new Error('OpenAI API Key is not provided.');
-
+    
         // Reference: www.stackoverflow.com/questions/74276173/how-to-send-multipart-form-data-payload-with-typescript-obsidian-library
         const N = 16 // The length of our random boundry string
         const randomBoundryString = 'WebKitFormBoundary' + Array(N + 1).join((Math.random().toString(36) + '00000000000000000').slice(2, 18)).slice(0, N)
@@ -132,25 +132,64 @@ export default class SmartMemosPlugin extends Plugin {
         const post_string = `\r\n------${randomBoundryString}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n------${randomBoundryString}--\r\n`
         const pre_string_encoded = new TextEncoder().encode(pre_string);
         const post_string_encoded = new TextEncoder().encode(post_string);
-        const concatenated = await new Blob([pre_string_encoded, audioBuffer, post_string_encoded]).arrayBuffer()
+    
+        // Calculate the size of each chunk
+        const chunkSize = 20 * 1024 * 1024; // 15 MB
+    
+        // Calculate the number of chunks
+        const numChunks = Math.ceil(audioBuffer.byteLength / chunkSize);
+    
+        if (numChunks < 2) {
+            new Notice(`Transcribing audio...`);
+        } else {
+            new Notice(`Transcribing audio in ${numChunks} chunks. This may take a minute or two...`);
+        }
 
-        const options: RequestUrlParam = {
-            url: 'https://api.openai.com/v1/audio/transcriptions',
-            method: 'POST',
-            contentType: `multipart/form-data; boundary=----${randomBoundryString}`,
-            headers: {
-                'Authorization': 'Bearer ' + this.settings.apiKey
-            },
-            body: concatenated
-        };
 
-        
-        const response = await requestUrl(options).catch((error) => { 
-            if (error.message.includes('401')) throw new Error('OpenAI API Key is not valid.');
-            else throw error; 
-        });
-        if ('text' in response.json) return response.json.text;
-        else throw new Error('Error. ' + JSON.stringify(response.json));
+        // Create an array to store the results
+        let results = [];
+
+        // Process each chunk
+        for (let i = 0; i < numChunks; i++) {
+    
+            new Notice(`Transcribing chunk #${i + 1}...`);
+
+            // Get the start and end indices for this chunk
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, audioBuffer.byteLength);
+    
+            // Extract the chunk from the audio buffer
+            const chunk = audioBuffer.slice(start, end);
+    
+            // Concatenate the chunk with the pre and post strings
+            const concatenated = await new Blob([pre_string_encoded, chunk, post_string_encoded]).arrayBuffer()
+    
+            const options: RequestUrlParam = {
+                url: 'https://api.openai.com/v1/audio/transcriptions',
+                method: 'POST',
+                contentType: `multipart/form-data; boundary=----${randomBoundryString}`,
+                headers: {
+                    'Authorization': 'Bearer ' + this.settings.apiKey
+                },
+                body: concatenated
+            };
+    
+            const response = await requestUrl(options).catch((error) => { 
+                if (error.message.includes('401')) throw new Error('OpenAI API Key is not valid.');
+                else throw error; 
+            });
+    
+            if ('text' in response.json) {
+                // Add the result to the results array
+                results.push(response.json.text);
+            }
+            else throw new Error('Error. ' + JSON.stringify(response.json));
+
+            // Wait for 1 second before processing the next chunk
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        // Return all the results
+        return results.join(' ');
     }
 
     async findFilePath(text: string, regex: RegExp[]) {
@@ -178,11 +217,6 @@ export default class SmartMemosPlugin extends Plugin {
 	async generateText(prompt: string, editor: Editor, currentLn: number, contextPrompt?: string) {
         if (prompt.length < 1) throw new Error('Cannot find prompt.');
         if ( this.settings.apiKey.length <= 1) throw new Error('OpenAI API Key is not provided.');
-
-		if (prompt.length > TOKEN_LIMITS[this.settings.model]) {
-			new Notice(`shortening prompt`);
-			prompt = prompt.substring(prompt.length - (TOKEN_LIMITS[this.settings.model] + 300));
-		}
 
 		prompt = prompt + '.';
 
