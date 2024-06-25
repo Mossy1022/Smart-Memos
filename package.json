@@ -35,6 +35,7 @@
 		"typescript": "4.7.4"
 	},
 	"dependencies": {
-		"bootstrap": "^5.3.3"
+		"bootstrap": "^5.3.3",
+		"smart-chat-model": "^1.0.5"
 	}
 }
