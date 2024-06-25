@@ -4,14 +4,14 @@ interface AudioPluginSettings {
 	model: string;
     apiKey: string;
 	prompt: string;
-    attachmentFolderPath: string;
+    includeTranscript: boolean;
 }
 
 let DEFAULT_SETTINGS: AudioPluginSettings = {
 	model: 'gpt-4-0613',
     apiKey: '',
 	prompt: 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes in markdown language on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention \"the speaker\" anywhere in your response.  The notes your write should be written as if I were writting them. Finally, ensure to end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n',
-    attachmentFolderPath: 'Resources'  // Default path set to "Resources" folder
+    includeTranscript: true
 }
 
 interface TokenLimits {
@@ -50,11 +50,16 @@ export default class SmartMemosPlugin extends Plugin {
 	transcript: string;
 
 	apiKey: string = 'sk-as123mkqwenjasdasdj12...';
-    model: string = 'gpt-3.5-turbo-16k';
+    model: string = 'gpt-4-0613';
+
+    appJsonObj : any;
 
 	async onload() {
 
 		await this.loadSettings();
+
+        const app_json = await this.app.vault.adapter.read(".obsidian/app.json");
+        this.appJsonObj = JSON.parse(app_json);
 
 
 		this.addCommand({
@@ -158,8 +163,7 @@ export default class SmartMemosPlugin extends Plugin {
         if (filename == '') throw new Error('No file found in the text.');
     
         // Use the attachment folder path from the plugin settings
-        const attachmentFolderPath = this.settings.attachmentFolderPath || '/';
-        const fullPath = attachmentFolderPath + '/' + filename;
+        const fullPath = this.appJsonObj.attachmentFolderPath + '/' + filename;
     
         const file = this.app.vault.getAbstractFileByPath(fullPath);
         if (file instanceof TFile) {
@@ -288,25 +292,12 @@ class SmartMemosSettingTab extends PluginSettingTab {
 	constructor(app: App, plugin: SmartMemosPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
-
-        this.plugin.settings.prompt = 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention the speaker, the notes your write should be written as if they were me writting them. Finally, ensure the type format is readme and end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n';
-        this.plugin.settings.model = 'gpt-3.5-turbo-16k';
 	}
 
 	display(): void {
 		let {containerEl} = this;
 
 		containerEl.empty();
-
-        new Setting(containerEl)
-            .setName('Attachment Folder Path')
-            .setDesc('Path to the folder where attachments are stored after import. Check "attachment folder path" within "files and links" of obsidian settings')
-            .addText(text => text
-                .setValue(this.plugin.settings.attachmentFolderPath)
-                .onChange(async (value) => {
-                    this.plugin.settings.attachmentFolderPath = value;
-                    await this.plugin.saveSettings();
-                }));
 
 		new Setting(containerEl)
 			.setName('OpenAI api key')
@@ -350,5 +341,15 @@ class SmartMemosSettingTab extends PluginSettingTab {
 					this.plugin.settings.prompt = value;
 					await this.plugin.saveSettings();
 				})});
+
+        new Setting(containerEl)
+            .setName('Include Transcript')
+            .setDesc('Toggle this setting if you want to include the raw transcript on top of custom notes.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.includeTranscript)
+                .onChange(async (value) => {
+                    this.plugin.settings.includeTranscript = value;
+                    await this.plugin.saveSettings();
+                }));
 	}
 }
