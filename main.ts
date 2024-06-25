@@ -197,25 +197,20 @@ export default class SmartMemosPlugin extends Plugin {
 
 		new Notice(`Performing customized superhuman analysis...`);
 
+
         let LnToWrite = this.getNextNewLine(editor, currentLn);
         let lastLine = LnToWrite;
-
         const mock_env = {
             chunk_handler: (chunk: string) => {
-                // Split the chunk by new line character
-                const lines = chunk.split('\n');
-                lines.forEach((line, index) => {
-                    if (index > 0) {
-                        LnToWrite = this.getNextNewLine(editor, LnToWrite);
-                        LnToWrite++; // We want to add an extra break for each new line
-                    }
-                    editor.setLine(LnToWrite, editor.getLine(LnToWrite) + line);
-                });
+                editor.setLine(LnToWrite, editor.getLine(LnToWrite) + chunk);
+                if(chunk.includes('\n')){
+                    LnToWrite = this.getNextNewLine(editor, LnToWrite);
+                }
             },
             done_handler: (final_resp: string) => {
-                if (this.settings.includeTranscript) {
-                    LnToWrite = this.getNextNewLine(editor, LnToWrite);
-                    editor.setLine(LnToWrite++, '# Transcript\n\n' + this.transcript);
+                LnToWrite = this.getNextNewLine(editor, lastLine);
+                if(this.settings.includeTranscript) {
+                    editor.setLine(LnToWrite, editor.getLine(LnToWrite) + '\n# Transcript\n' + this.transcript);
                 }
             }
         };
