@@ -6,6 +6,10 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+.mermaid svg {
+    width: 100%;
+    height: auto;
+}
 
 .text-box {
     width: 350px;
