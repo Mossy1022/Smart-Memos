@@ -268,7 +268,7 @@ export default class SmartMemosPlugin extends Plugin {
         editor.setLine(LnToWrite, editor.getLine(LnToWrite) + '\n');
         
         // Add the raw transcript at the end
-        if (this.transcript) {
+        if (this.settings.includeTranscript) {
             editor.setLine(LnToWrite++, '# Transcript');
             editor.setLine(LnToWrite++, this.transcript);
         }
