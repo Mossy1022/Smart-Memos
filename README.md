@@ -8,7 +8,7 @@ Welcome to the Smart Memos! This plugin integrates seamlessly with your Obsidian
 - **Audio Transcription**: Transcribe audio files that are either spoken directly into Obsidian or imported into a note using advanced AI models.
 - **Note Generation**: Generate detailed notes in markdown language from the transcribed audio.
 - **Customizable Prompts**: Customize the prompt that will be sent to the AI model before adding your transcribed audio so you can get any kind of analysis, note structure format, or enhancements you want!
-- **Built in Obsidian Support**: Use the customized prompt to request formats that are supported by obsidian, such as mermaid charts as you can see in the video.
+- **Built in Obsidian Support**: Use the customized prompt to request formats that are supported by obsidian, such as markdown and mermaid charts as you can see in the video.
 - **Support for Multiple Audio Formats**: Supports mp3, mp4, mpeg, mpga, wav, webm audio formats.
 
 ## Installation
