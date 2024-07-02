@@ -325,7 +325,7 @@ export default class SmartMemosPlugin extends Plugin {
             fullPath = `${folderPath}/${filePath}`;
             fullPath = normalizePath(fullPath); // Normalize the full path
 
-            console.log('fill path 2: ', fullPath);
+            console.log('full path 2: ', fullPath);
 
         }
     
