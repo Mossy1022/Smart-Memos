@@ -5,6 +5,7 @@
 Welcome to the Smart Memos! This plugin integrates seamlessly with your Obsidian, offering an advanced, interactive way to transcribe and generate notes from your audio files. My goal is to enhance your ability to capture and understand information from audio sources, transforming the way you interact with and understand your information.
 
 ## Features
+- **Enhanced Audio Recorder**: Record audio files directly into an Obsidian note with added functionality to pause, resume, and restart recordings. 
 - **Audio Transcription**: Transcribe audio files that are either spoken directly into Obsidian or imported into a note using advanced AI models.
 - **Note Generation**: Generate detailed notes in markdown language from the transcribed audio.
 - **Customizable Prompts**: Customize the prompt that will be sent to the AI model before adding your transcribed audio so you can get any kind of analysis, note structure format, or enhancements you want!
@@ -22,12 +23,12 @@ Note* This plugin currently uses online openAI models to recieve and transcribe 
 ## Platforms
 
 - Desktop
-- Mobile (Android only) - Apple has their own audio format (m4a) that makes everyone's lives more difficult.  Will try to get around this without needing to use another library.
+- Mobile 
 
 ## Usage
 Once installed, the Smart Memos Plugin provides an intuitive interface to transcribe your audio files and generate notes.
 
-- **Adding Audio**: To speak your memo directly into obsidian, ensure the audio recorder core plugin is enabled and tap the microphone icon to start/stop recording.  To import audio into a note, simply drag and drop the file into it.
+- **Adding Audio**: To speak your memo directly into Obsidian, tap the microphone icon to open the smart memos popup that'll automatically start recording.  To import audio into a note, simply drag and drop the file into it.
 - **Transcribing Audio**: To transcribe an audio file after it's been imported or directly spoken into a note, move your cursor right underneath the audio file and use the command `Smart transcribe` from the command palette (`Ctrl + p` for Windows and `Cmd + p` for Mac). The plugin will transcribe the audio file and generate detailed notes.
 - **Customizing the Prompt**: You can customize the prompt that will be sent to the AI model before adding your transcribed audio in the plugin settings.
 - **Direct Audio input**: You record audio from your microphone directly in obsidian through the "Audio Recorder" core plugin that should be filled on by default.  You can find the mic icon ribbon in your left toolbar menu
