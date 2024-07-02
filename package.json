@@ -1,6 +1,6 @@
 {
 	"name": "smart-memos",
-	"version": "1.0.10",
+	"version": "1.1.0",
 	"description": "Create personalized and intelligent analysis, summaries, and more for audio recordings that can be imported or spoken directly into a note",
 	"main": "main.js",
 	"scripts": {
@@ -36,6 +36,7 @@
 	},
 	"dependencies": {
 		"bootstrap": "^5.3.3",
-		"smart-chat-model": "^1.0.5"
+		"smart-chat-model": "^1.0.5",
+		"wavesurfer.js": "^7.8.0"
 	}
 }

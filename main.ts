@@ -1,6 +1,9 @@
-import { App, Editor, MarkdownView, normalizePath, Notice, Plugin, PluginSettingTab, requestUrl,  RequestUrlParam, Setting, TAbstractFile, TFile } from 'obsidian';
+import { App, Editor, MarkdownView, normalizePath, Notice, Plugin, PluginSettingTab, requestUrl,  RequestUrlParam, Setting, TAbstractFile, TFile, MarkdownPostProcessorContext } from 'obsidian';
 const {SmartChatModel} = require('smart-chat-model');
 
+
+import { SmartMemosAudioRecordModal } from './SmartMemosAudioRecordModal'; // Update with the correct path
+import { saveFile } from 'Utils';
 
 interface AudioPluginSettings {
 	model: string;
@@ -15,23 +18,6 @@ let DEFAULT_SETTINGS: AudioPluginSettings = {
 	prompt: 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes in markdown language on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention \"the speaker\" anywhere in your response.  The notes your write should be written as if I were writting them. Finally, ensure to end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n',
     includeTranscript: true
 }
-
-interface TokenLimits {
-    [key: string]: number;
-  }
-  
-const TOKEN_LIMITS: TokenLimits = {
-	'gpt-3.5-turbo-16k': 16000,
-	'gpt-3.5-turbo-0613':4096,
-	'text-davinci-003': 4097,
-	'text-davinci-002': 4097,
-	'code-davinci-002': 8001,
-	'code-davinci-001': 8001,
-	'gpt-4-0613': 8192,
-	'gpt-4-32k-0613': 32768,
-	'gpt-4o': 32768
-}
-
 
 const MODELS: string[] = [
 	'gpt-3.5-turbo-16k',
@@ -56,6 +42,9 @@ export default class SmartMemosPlugin extends Plugin {
 
     appJsonObj : any;
 
+    // Add a new property to store the audio file
+    audioFile: Blob;
+
 	async onload() {
 
 		await this.loadSettings();
@@ -72,9 +61,125 @@ export default class SmartMemosPlugin extends Plugin {
             }
 		});
 
+        this.registerMarkdownPostProcessor((el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+            const audioLinks = el.querySelectorAll('a.internal-link[data-href$=".wav"]');
+            console.log('audio links: ', audioLinks);
+            audioLinks.forEach(link => {
+
+                console.log('linksss');
+
+                const href = link.getAttribute('data-href');
+                if (href === null) {
+                    console.error('Failed to get the href attribute from the link element.');
+                    return; // Skip this iteration because there's no href
+                }
+        
+                const abstractFile = this.app.vault.getAbstractFileByPath(href);
+                if (!(abstractFile instanceof TFile)) {
+                    console.error('The path does not point to a valid file in the vault.');
+                    return; // Skip this iteration because there's no file
+                }
+        
+                const audio = document.createElement('audio');
+                audio.src = this.app.vault.getResourcePath(abstractFile);
+                audio.controls = true;
+                audio.addEventListener('loadedmetadata', () => {
+                    if (audio.parentNode) {
+                        const durationDisplay = document.createElement('span');
+                        durationDisplay.textContent = `Duration: ${audio.duration.toFixed(2)} seconds`;
+                        audio.parentNode.insertBefore(durationDisplay, audio.nextSibling);
+                    }
+                });
+                audio.load(); // Trigger metadata loading
+                link.replaceWith(audio); // Replace the link with the audio player
+            });
+        });
+
+
+         // Add the audio recorder ribbon
+         // Update the callback for the audio recorder ribbon
+        this.addRibbonIcon('microphone', 'Record smart memo', async (evt: MouseEvent) => {
+            // Open the audio recorder and store the recorded audio
+            this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this)).open();
+
+        });
+
 		this.addSettingTab(new SmartMemosSettingTab(this.app, this));
 		
 	}
+
+    // Add a new method to handle the audio recording and processing
+    async handleAudioRecording(audioFile: Blob, transcribe: boolean) {
+        try {
+
+            console.log('Handling audio recording:', audioFile);
+
+            if (!audioFile) {
+                console.log('No audio was recorded.');
+                return;
+            }
+
+            this.audioFile = audioFile;
+
+
+             // Save the audio recording as a .wav file
+             const fileName = `recording-${Date.now()}.wav`;
+             const file = await saveFile(this.app, this.audioFile, fileName, this.appJsonObj.attachmentFolderPath);
+ 
+            // Insert a link to the audio file in the current note
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (activeView) {
+                const editor = activeView.editor;
+                const cursor = editor.getCursor();
+                const link = `![[${file.path}]]`;
+                editor.replaceRange(link, cursor);
+
+                  // Trigger a change in the editor to force Obsidian to re-render the note
+                editor.replaceRange('', { line: cursor.line, ch: cursor.ch }, { line: cursor.line, ch: cursor.ch });
+            }
+
+           // Transcribe the audio file if the transcribe parameter is true
+            if (transcribe) {
+                this.transcribeRecording(file);
+            }
+             // Handle the saved audio file
+             // You can replace this with your own handling logic
+             console.log(file);
+        } catch (error) {
+            console.error('Error handling audio recording:', error);
+            new Notice('Failed to handle audio recording');
+        }
+    }
+
+    // Add a new method to transcribe the audio file and generate text
+async transcribeRecording(audioFile: TFile) {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) {
+        console.error('No active Markdown view found.');
+        return;
+    }
+
+    const editor = activeView.editor;
+    this.app.vault.readBinary(audioFile).then((audioBuffer) => {
+        if (this.writing) {
+            new Notice('Generator is already in progress.');
+            return;
+        }
+        this.writing = true;
+        new Notice("Generating transcript...");
+        const fileType = audioFile.extension;
+        this.generateTranscript(audioBuffer, fileType).then((result) => {
+            this.transcript = result;
+            const prompt = this.settings.prompt + result;
+            new Notice('Transcript generated...');
+            this.generateText(prompt, editor , editor.getCursor('to').line);
+        }).catch(error => {
+            console.warn(error.message);
+            new Notice(error.message);
+            this.writing = false;
+        });
+    });
+}
 
 	writeText(editor: Editor, LnToWrite: number, text: string) {
         const newLine = this.getNextNewLine(editor, LnToWrite);
@@ -203,9 +308,17 @@ export default class SmartMemosPlugin extends Plugin {
     
         if (filename == '') throw new Error('No file found in the text.');
     
+
         // Use the attachment folder path from the plugin settings
-        const fullPath = this.appJsonObj.attachmentFolderPath + '/' + filename;
-    
+        // Check if the filename already contains the attachment folder path
+        let fullPath;
+        if (filename.includes(this.appJsonObj.attachmentFolderPath)) {
+            fullPath = filename;
+        } else {
+            // Use the attachment folder path from the plugin settings
+            fullPath = this.appJsonObj.attachmentFolderPath + '/' + filename;
+        }    
+
         const file = this.app.vault.getAbstractFileByPath(fullPath);
         if (file instanceof TFile) {
             return file;
@@ -258,60 +371,6 @@ export default class SmartMemosPlugin extends Plugin {
             }
         );
         const resp = await smart_chat_model.complete({messages: messages});
-        console.log('resp: ', resp);
-        // editor.setLine(LnToWrite, editor.getLine(LnToWrite) + resp);
-        
-        // const response = await requestUrl(options);
-        
-        // if (response.status !== 200) {
-        //     const errorResponse = JSON.parse(response.text);
-        //     const errorMessage = errorResponse && errorResponse.error.message ? errorResponse.error.message : "Error";
-        //     new Notice(`Error. ${errorMessage}`);
-        //     throw new Error(`Error. ${errorMessage}`);
-        // } else {
-        //     new Notice(`Superhuman analysis complete!`);
-        // }
-                
-        // // Assuming the responseBody is an array of data
-        // const data = response.text.split('\n');
-        
-        // let LnToWrite = this.getNextNewLine(editor, currentLn);
-        // editor.setLine(LnToWrite++, '\n');
-        // let end = false;
-        // let buffer = '';
-        
-        // for (const datum of data) {
-        //     if (datum.trim() === 'data: [DONE]') {
-        //         end = true;
-        //         break;
-        //     }
-        //     if (datum.startsWith('data:')) {
-        //         const json = JSON.parse(datum.substring(6));
-        //         if ('error' in json) throw new Error('Error: ' + json.error.message);
-        //         if (!('choices' in json)) throw new Error('Error: ' + JSON.stringify(json));
-        //         if ('content' in json.choices[0].delta) {
-        //             const text = json.choices[0].delta.content;
-        //             if (buffer.length < 1) buffer += text.trim();
-        //             if (buffer.length > 0) {
-        //                 const lines = text.split('\n');
-        //                 if (lines.length > 1) {
-        //                     for (const word of lines) {
-        //                         editor.setLine(LnToWrite, editor.getLine(LnToWrite++) + word + '\n');
-        //                     }
-        //                 } else {
-        //                     editor.setLine(LnToWrite, editor.getLine(LnToWrite) + text);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-        // editor.setLine(LnToWrite, editor.getLine(LnToWrite) + '\n');
-        
-        // // Add the raw transcript at the end
-        // if (this.transcript) {
-        //     editor.setLine(LnToWrite++, '# Transcript');
-        //     editor.setLine(LnToWrite++, this.transcript);
-        // }
         
         this.writing = false;
     }
@@ -324,7 +383,6 @@ export default class SmartMemosPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 }
-
 
 class SmartMemosSettingTab extends PluginSettingTab {
 	plugin: SmartMemosPlugin;
@@ -372,7 +430,7 @@ class SmartMemosSettingTab extends PluginSettingTab {
 			.setDesc('Prompt that will be sent to Chatpgt right before adding your transcribed audio')
 			.addTextArea(text => {
 				if (text.inputEl) {
-					text.inputEl.classList.add('text-box');
+					text.inputEl.classList.add('smart-memo-text-box');
 				}				
 				text.setPlaceholder(
                     'Act as my personal secretary and worlds greatest entreprenuer and know I will put these notes in my personal obsidian where I have all my notes linked by categories, tags, etc. The following is a transcription of recording of someone talking aloud or people in a conversation. May be a lot of random things that are said given fluidity of conversation and the microphone ability to pick up all audio. Make outline of all topics and points within a structured hierarchy. Make sure to include any quantifiable information said such as the cost of headphones being $400.  Then go into to detail with summaries that explain things more eloquently. Finally, Create a mermaid chart code that complements the outline.\n\n')
