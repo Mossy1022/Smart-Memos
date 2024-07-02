@@ -1,10 +1,11 @@
-import { App, TFile, TFolder } from 'obsidian';
+import { App, TFile, TFolder, normalizePath } from 'obsidian';
 
 export async function saveFile(app: App, audioBlob: Blob, fileName: string, path: string): Promise<TFile> {
     try {
-        const filePath = `${path}/${fileName}`;
+        const normalizedPath = normalizePath(path);
+        const filePath = `${normalizedPath}/${fileName}`;
 
-        await directoryExistsAtPath(app, path);
+        await ensureDirectoryExists(app, normalizedPath);
 
         const arrayBuffer = await audioBlob.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
@@ -20,12 +21,13 @@ export async function saveFile(app: App, audioBlob: Blob, fileName: string, path
     }
 }
 
-async function directoryExistsAtPath(app: App, folderPath: string) {
+async function ensureDirectoryExists(app: App, folderPath: string) {
     const parts = folderPath.split('/');
     let currentPath = '';
 
     for (const part of parts) {
         currentPath = currentPath ? `${currentPath}/${part}` : part;
+        
         try {
             const folder = app.vault.getAbstractFileByPath(currentPath);
             if (!folder) {
@@ -36,8 +38,13 @@ async function directoryExistsAtPath(app: App, folderPath: string) {
                 throw new Error(`${currentPath} is not a folder`);
             }
         } catch (error) {
-            console.error(`Error ensuring directory exists: ${error.message}`);
-            throw error;
+            if (error.message.includes('Folder already exists')) {
+                // Folder already exists, continue to the next part
+                console.log(`Handled existing folder: ${currentPath}`);
+            } else {
+                console.error(`Error ensuring directory exists: ${error.message}`);
+                throw error;
+            }
         }
     }
 }

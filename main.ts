@@ -111,7 +111,6 @@ export default class SmartMemosPlugin extends Plugin {
     // Add a new method to handle the audio recording and processing
     async handleAudioRecording(audioFile: Blob, transcribe: boolean) {
         try {
-
             console.log('Handling audio recording:', audioFile);
 
             if (!audioFile) {
@@ -121,11 +120,10 @@ export default class SmartMemosPlugin extends Plugin {
 
             this.audioFile = audioFile;
 
+            // Save the audio recording as a .wav file
+            const fileName = `recording-${Date.now()}.wav`;
+            const file = await saveFile(this.app, this.audioFile, fileName, this.appJsonObj.attachmentFolderPath);
 
-             // Save the audio recording as a .wav file
-             const fileName = `recording-${Date.now()}.wav`;
-             const file = await saveFile(this.app, this.audioFile, fileName, this.appJsonObj.attachmentFolderPath);
- 
             // Insert a link to the audio file in the current note
             const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
             if (activeView) {
@@ -134,17 +132,18 @@ export default class SmartMemosPlugin extends Plugin {
                 const link = `![[${file.path}]]`;
                 editor.replaceRange(link, cursor);
 
-                  // Trigger a change in the editor to force Obsidian to re-render the note
+                // Trigger a change in the editor to force Obsidian to re-render the note
                 editor.replaceRange('', { line: cursor.line, ch: cursor.ch }, { line: cursor.line, ch: cursor.ch });
             }
 
-           // Transcribe the audio file if the transcribe parameter is true
+            // Transcribe the audio file if the transcribe parameter is true
             if (transcribe) {
                 this.transcribeRecording(file);
             }
-             // Handle the saved audio file
-             // You can replace this with your own handling logic
-             console.log(file);
+
+            // Handle the saved audio file
+            // You can replace this with your own handling logic
+            console.log(file);
         } catch (error) {
             console.error('Error handling audio recording:', error);
             new Notice('Failed to handle audio recording');
@@ -152,34 +151,34 @@ export default class SmartMemosPlugin extends Plugin {
     }
 
     // Add a new method to transcribe the audio file and generate text
-async transcribeRecording(audioFile: TFile) {
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!activeView) {
-        console.error('No active Markdown view found.');
-        return;
-    }
-
-    const editor = activeView.editor;
-    this.app.vault.readBinary(audioFile).then((audioBuffer) => {
-        if (this.writing) {
-            new Notice('Generator is already in progress.');
+    async transcribeRecording(audioFile: TFile) {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!activeView) {
+            console.error('No active Markdown view found.');
             return;
         }
-        this.writing = true;
-        new Notice("Generating transcript...");
-        const fileType = audioFile.extension;
-        this.generateTranscript(audioBuffer, fileType).then((result) => {
-            this.transcript = result;
-            const prompt = this.settings.prompt + result;
-            new Notice('Transcript generated...');
-            this.generateText(prompt, editor , editor.getCursor('to').line);
-        }).catch(error => {
-            console.warn(error.message);
-            new Notice(error.message);
-            this.writing = false;
+
+        const editor = activeView.editor;
+        this.app.vault.readBinary(audioFile).then((audioBuffer) => {
+            if (this.writing) {
+                new Notice('Generator is already in progress.');
+                return;
+            }
+            this.writing = true;
+            new Notice("Generating transcript...");
+            const fileType = audioFile.extension;
+            this.generateTranscript(audioBuffer, fileType).then((result) => {
+                this.transcript = result;
+                const prompt = this.settings.prompt + result;
+                new Notice('Transcript generated...');
+                this.generateText(prompt, editor , editor.getCursor('to').line);
+            }).catch(error => {
+                console.warn(error.message);
+                new Notice(error.message);
+                this.writing = false;
+            });
         });
-    });
-}
+    }
 
 	writeText(editor: Editor, LnToWrite: number, text: string) {
         const newLine = this.getNextNewLine(editor, LnToWrite);
@@ -300,25 +299,37 @@ async transcribeRecording(audioFile: TFile) {
     async findFilePath(text: string, regex: RegExp[]) {
         let filename = '';
         let result: RegExpExecArray | null;
+    
+        // Find the filename using the provided regex patterns
         for (const reg of regex) {
             while ((result = reg.exec(text)) !== null) {
                 filename = normalizePath(decodeURI(result[0])).trim();
             }
         }
     
-        if (filename == '') throw new Error('No file found in the text.');
+        if (filename === '') {
+            throw new Error('No file found in the text.');
+        }
     
-
-        // Use the attachment folder path from the plugin settings
-        // Check if the filename already contains the attachment folder path
         let fullPath;
         if (filename.includes(this.appJsonObj.attachmentFolderPath)) {
             fullPath = filename;
+            console.log('full path 1: ', fullPath);
         } else {
-            // Use the attachment folder path from the plugin settings
-            fullPath = this.appJsonObj.attachmentFolderPath + '/' + filename;
-        }    
 
+            // Ensure no leading or trailing slashes in the attachment folder path and filename
+            const folderPath = this.appJsonObj.attachmentFolderPath.replace(/\/$/, ''); // Remove trailing slash if any
+            const filePath = filename.replace(/^\//, ''); // Remove leading slash if any
+    
+            // Construct the full path
+            fullPath = `${folderPath}/${filePath}`;
+            fullPath = normalizePath(fullPath); // Normalize the full path
+
+            console.log('fill path 2: ', fullPath);
+
+        }
+    
+        // Attempt to find the file in the vault
         const file = this.app.vault.getAbstractFileByPath(fullPath);
         if (file instanceof TFile) {
             return file;
@@ -326,6 +337,7 @@ async transcribeRecording(audioFile: TFile) {
             throw new Error('File not found at ' + fullPath);
         }
     }
+    
 
 	async generateText(prompt: string, editor: Editor, currentLn: number, contextPrompt?: string) {
         if (prompt.length < 1) throw new Error('Cannot find prompt.');
