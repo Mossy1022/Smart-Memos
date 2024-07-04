@@ -64,7 +64,7 @@ export default class SmartMemosPlugin extends Plugin {
 
         this.registerMarkdownPostProcessor((el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
             const audioLinks = el.querySelectorAll('a.internal-link[data-href$=".wav"]');
-            console.log('audio links: ', audioLinks);
+            // console.log('audio links: ', audioLinks);
             audioLinks.forEach(link => {
 
                 console.log('linksss');
