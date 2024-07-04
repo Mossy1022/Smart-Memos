@@ -36,7 +36,11 @@
 	},
 	"dependencies": {
 		"bootstrap": "^5.3.3",
-		"smart-chat-model": "^1.0.5",
+		"ejs": "^3.1.10",
+		"smart-chat-model": "file:../jsbrains/smart-chat-model",
+		"smart-environment": "file:../jsbrains/smart-environment",
+		"smart-setting": "file:../jsbrains/smart-setting",
+		"smart-templates": "file:../jsbrains/smart-templates",
 		"wavesurfer.js": "^7.8.0"
 	}
 }
