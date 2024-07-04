@@ -43,7 +43,7 @@ export default class SmartMemosPlugin extends Plugin {
             Setting,
         };
         await this.load_settings();
-        this.env = new SmartEnv(this, {
+        this.env = SmartEnv.create(this, {
             ejs: ejs,
             // settings: this.settings,
             views: views,
@@ -432,7 +432,7 @@ import { SmartSettings } from "smart-setting";
 class SmartMemosSettings extends SmartSettings {
     get settings() { return this.env.smart_memos_plugin.settings; }
     set settings(settings) {
-        this.env.smart_memos_plugin.settings = settings.smart_memos_plugin || settings;
+        this.env.smart_memos_plugin.settings = settings;
     }
     get model_config() { return this.settings[this.settings.chat_model_platform_key]; }
     async get_view_data() {
@@ -459,7 +459,7 @@ class SmartMemosSettings extends SmartSettings {
     }
     // import model config from smart-connections
     async import_model_config_from_smart_connections() {
-        const config_file = await this.main.app.vault.adapter.read('.obsidian/plugins/smart-connections/data.json');
+        const config_file = await this.env.smart_memos_plugin.app.vault.adapter.read('.obsidian/plugins/smart-connections/data.json');
         if (!config_file) return new Notice("[Smart Templates] No model config found in smart-connections");
         const config = JSON.parse(config_file);
         const settings = this.settings;
@@ -468,7 +468,7 @@ class SmartMemosSettings extends SmartSettings {
         });
         if (config.chat_model_platform_key) settings.chat_model_platform_key = config.chat_model_platform_key;
         this.settings = settings;
-        await this.main.save_settings();
+        await this.env.smart_memos_plugin.save_settings();
         this.render();
     }
 }
