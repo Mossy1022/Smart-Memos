@@ -6,6 +6,25 @@ dotenv.config();
 import fs from "fs";
 import path from "path";
 
+// Compile EJS templates into JSON
+const views = {};
+fs.readdir("./", (err, files) => {
+	if (err) {
+		console.error('Error reading the directory', err);
+		return;
+	}
+	files.forEach(file => {
+		if(!['.ejs', '.md'].includes(path.extname(file))) return;
+		const file_path = path.join("./", file);
+		const content = fs.readFileSync(file_path, 'utf8').replace(/\r\n/g, '\n');
+		views[path.basename(file, path.extname(file))] = content;
+	});
+	// console.log('views', views);
+	// add dist folder if not exists
+	if (!fs.existsSync('dist')) fs.mkdirSync('dist');
+	fs.writeFileSync('dist/views.json', JSON.stringify(views, null, 2));
+	console.log('EJS templates compiled into templates.json');
+});
 
 const banner =
 `/*

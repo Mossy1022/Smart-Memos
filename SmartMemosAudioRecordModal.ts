@@ -5,7 +5,7 @@ export class SmartMemosAudioRecordModal extends Modal {
     private chunks: BlobPart[] = [];
     private resolve: (value: Blob | PromiseLike<Blob>) => void;
     private reject: (reason?: any) => void;
-    private handleAudioRecording: (audioFile: Blob | null, transcribe: boolean) => void;
+    private handleAudioRecording: (audioFile: Blob | null, transcribe: boolean, template: string | null) => void;
     private isRecording: boolean = false;
     private timer: HTMLElement;
     private intervalId: number | null = null;
@@ -14,7 +14,7 @@ export class SmartMemosAudioRecordModal extends Modal {
     private redDot: HTMLElement;
     private isResetting: boolean = false; // Flag to track reset state
 
-    constructor(app: any, handleAudioRecording: (audioFile: Blob | null, transcribe: boolean) => void) {
+    constructor(app: any, handleAudioRecording: (audioFile: Blob | null, transcribe: boolean, template: string | null) => void) {
         super(app);
         this.handleAudioRecording = handleAudioRecording;
     }
@@ -53,7 +53,7 @@ export class SmartMemosAudioRecordModal extends Modal {
 
         stopButton.addEventListener('click', async () => {
             const audioFile = await this.stopRecording();
-            this.handleAudioRecording(audioFile, false);
+            this.handleAudioRecording(audioFile, false, null);
         });
 
         playPauseButton.addEventListener('click', () => {
@@ -73,11 +73,29 @@ export class SmartMemosAudioRecordModal extends Modal {
             this.isRecording = !this.isRecording;
         });
 
+        // if window.smart_env.smart_transcribe then list templates in dropdown
+        let template: string | null = null;
+        if (window.smart_env?.smart_templates) {
+            const transcribeDropdown = controlGroupWrapper.createEl('select', { cls: 'smart-memo-modal-button smart-memo-full-width-button smart-memo-transcribe-dropdown' });
+            const transcribeTemplates = window.smart_env.smart_templates.templates;
+            // add empty option
+            transcribeDropdown.createEl('option', { text: 'Select Smart Template' });
+            for (const template of transcribeTemplates) {
+                const option = transcribeDropdown.createEl('option', { text: template });
+            }
+            transcribeDropdown.addEventListener('change', (event: Event) => {
+                template = (event.target as HTMLSelectElement).value;
+                if (template === 'Select Smart Template') {
+                    template = null;
+                }
+            });
+        }
+
         const transcribeButton = controlGroupWrapper.createEl('button', { cls: 'smart-memo-modal-button smart-memo-full-width-button smart-memo-transcribe-button' });
 
         transcribeButton.addEventListener('click', async () => {
             const audioFile = await this.stopRecording();
-            this.handleAudioRecording(audioFile, true);
+            this.handleAudioRecording(audioFile, true, template);
         });
 
         setIcon(transcribeButton, 'file-text'); // Initially set to bulb
