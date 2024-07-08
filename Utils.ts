@@ -2,8 +2,18 @@ import { App, TFile, TFolder, normalizePath } from 'obsidian';
 
 export async function saveFile(app: App, audioBlob: Blob, fileName: string, path: string): Promise<TFile> {
     try {
-        const normalizedPath = normalizePath(path);
-        const filePath = `${normalizedPath}/${fileName}`;
+        
+        let normalizedPath: string;
+        try {
+            normalizedPath = normalizePath(path);
+            if (!normalizedPath) {
+                console.warn('Normalized path is invalid, using root path');
+                normalizedPath = '/'; // Set to root path of the vault
+            }
+        } catch (error) {
+            console.warn('Error normalizing path, using root path:', error);
+            normalizedPath = '/'; // Set to root path of the vault
+        }        const filePath = `${normalizedPath}/${fileName}`;
 
         await ensureDirectoryExists(app, normalizedPath);
 
