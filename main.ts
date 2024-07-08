@@ -61,6 +61,17 @@ export default class SmartMemosPlugin extends Plugin {
             }
 		});
 
+        this.addCommand({
+            id: 'record-smart-memo',
+            name: 'Record smart memo',
+            editorCallback: async (editor: Editor, view: MarkdownView) => {
+                // Open the audio recorder and store the recorded audio
+                this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this)).open();
+
+            }
+        });
+
+
         this.registerMarkdownPostProcessor((el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
             const audioLinks = el.querySelectorAll('a.internal-link[data-href$=".wav"]');
             console.log('audio links: ', audioLinks);
@@ -198,8 +209,10 @@ export default class SmartMemosPlugin extends Plugin {
 	commandGenerateTranscript(editor: Editor) {
         const position = editor.getCursor();
         const text = editor.getRange({ line: 0, ch: 0 }, position);
-        const regex = [/(?<=\[\[)(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=]])/g,
-            /(?<=\[(.*)]\()(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=\))/g];
+        const regex = [
+            /(?<=\[\[)(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=]])/g,
+            /(?<=\[(.*)]\()(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=\))/g
+        ];
         this.findFilePath(text, regex).then((path) => {
             const fileType = path.split('.').pop();
             if (fileType == undefined || fileType == null || fileType == '') {
@@ -218,7 +231,7 @@ export default class SmartMemosPlugin extends Plugin {
                             this.transcript = result;
                             const prompt = this.settings.prompt + result;
                             new Notice('Transcript generated...');
-                    this.generateText(prompt, editor , editor.getCursor('to').line);
+                            this.generateText(prompt, editor, editor.getCursor('to').line);
                         }).catch(error => {
                             console.warn(error.message);
                             new Notice(error.message);
@@ -263,13 +276,15 @@ export default class SmartMemosPlugin extends Plugin {
                 }
             }
     
+            // Check if the file exists in the constructed path
             const exists = this.app.vault.getAbstractFileByPath(fullPath) instanceof TAbstractFile;
             if (exists) return fullPath;
             else {
+                // If not found, search through all files in the vault
                 let path = '';
                 let found = false;
                 this.app.vault.getFiles().forEach((file) => {
-                    if (file.name === filename) {
+                    if (file.name === filename.split('/').pop()) {
                         path = file.path;
                         found = true;
                     }
