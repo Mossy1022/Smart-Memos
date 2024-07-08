@@ -200,30 +200,85 @@ export default class SmartMemosPlugin extends Plugin {
         const text = editor.getRange({ line: 0, ch: 0 }, position);
         const regex = [/(?<=\[\[)(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=]])/g,
             /(?<=\[(.*)]\()(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=\))/g];
-        this.findFilePath(text, regex).then((audioFile: TFile) => {
-            this.app.vault.readBinary(audioFile).then((audioBuffer) => {
-                if (this.writing) {
-                    new Notice('Generator is already in progress.');
-                    return;
-                }
-                this.writing = true;
-                new Notice("Generating transcript...");
-                const fileType = audioFile.extension;
-                this.generateTranscript(audioBuffer, fileType).then((result) => {
-                    this.transcript = result;
-                    const prompt = this.settings.prompt + result;
-                    new Notice('Transcript generated...');
+        this.findFilePath(text, regex).then((path) => {
+            const fileType = path.split('.').pop();
+            if (fileType == undefined || fileType == null || fileType == '') {
+                new Notice('No audio file found');
+            } else {
+                this.app.vault.adapter.exists(path).then((exists) => {
+                    if (!exists) throw new Error(path + ' does not exist');
+                    this.app.vault.adapter.readBinary(path).then((audioBuffer) => {
+                        if (this.writing) {
+                            new Notice('Generator is already in progress.');
+                            return;
+                        }
+                        this.writing = true;
+                        new Notice("Generating transcript...");
+                        this.generateTranscript(audioBuffer, fileType).then((result) => {
+                            this.transcript = result;
+                            const prompt = this.settings.prompt + result;
+                            new Notice('Transcript generated...');
                     this.generateText(prompt, editor , editor.getCursor('to').line);
-                }).catch(error => {
-                    console.warn(error.message);
-                    new Notice(error.message);
-                    this.writing = false;
+                        }).catch(error => {
+                            console.warn(error.message);
+                            new Notice(error.message);
+                            this.writing = false;
+                        });
+                    });
                 });
-            });
+            }
         }).catch(error => {
             console.warn(error.message);
             new Notice(error.message);
         });
+    }
+
+    
+    async findFilePath(text: string, regex: RegExp[]) {
+        const fullPath = await this.getAttachmentDir().then((attachmentPath) => {
+            let filename = '';
+            let result: RegExpExecArray | null;
+            for (const reg of regex) {
+                while ((result = reg.exec(text)) !== null) {
+                    filename = normalizePath(decodeURI(result[0])).trim();
+                }
+            }
+    
+            if (filename == '') throw new Error('No file found in the text.');
+    
+            const fileInSpecificFolder = filename.includes('/');
+            const AttInRootFolder = attachmentPath === '' || attachmentPath === '/';
+            const AttInCurrentFolder = attachmentPath.startsWith('./');
+            const AttInSpecificFolder = !AttInRootFolder && !AttInCurrentFolder;
+    
+            let fullPath = '';
+    
+            if (AttInRootFolder || fileInSpecificFolder) fullPath = filename;
+            else {
+                if (AttInSpecificFolder) fullPath = attachmentPath + '/' + filename;
+                if (AttInCurrentFolder) {
+                    const attFolder = attachmentPath.substring(2);
+                    if (attFolder.length == 0) fullPath = this.getCurrentPath() + '/' + filename;
+                    else fullPath = this.getCurrentPath() + '/' + attFolder + '/' + filename;
+                }
+            }
+    
+            const exists = this.app.vault.getAbstractFileByPath(fullPath) instanceof TAbstractFile;
+            if (exists) return fullPath;
+            else {
+                let path = '';
+                let found = false;
+                this.app.vault.getFiles().forEach((file) => {
+                    if (file.name === filename) {
+                        path = file.path;
+                        found = true;
+                    }
+                });
+                if (found) return path;
+                else throw new Error('File not found');
+            }
+        });
+        return fullPath as string;
     }
 
 	async generateTranscript(audioBuffer: ArrayBuffer, filetype: string) {
@@ -296,46 +351,21 @@ export default class SmartMemosPlugin extends Plugin {
         return results.join(' ');
     }
 
-    async findFilePath(text: string, regex: RegExp[]) {
-        let filename = '';
-        let result: RegExpExecArray | null;
+    async getAttachmentDir() {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) throw new Error('No active file');
+        const dir = this.app.vault.getAvailablePathForAttachments(activeFile.basename, activeFile?.extension, activeFile);  // getAvailablePathForAttachments is undocumented
+        console.log('dir: ', dir);
+        return dir;
+    }
     
-        // Find the filename using the provided regex patterns
-        for (const reg of regex) {
-            while ((result = reg.exec(text)) !== null) {
-                filename = normalizePath(decodeURI(result[0])).trim();
-            }
-        }
-    
-        if (filename === '') {
-            throw new Error('No file found in the text.');
-        }
-    
-        let fullPath;
-        if (filename.includes(this.appJsonObj.attachmentFolderPath)) {
-            fullPath = filename;
-            console.log('full path 1: ', fullPath);
-        } else {
-
-            // Ensure no leading or trailing slashes in the attachment folder path and filename
-            const folderPath = this.appJsonObj.attachmentFolderPath.replace(/\/$/, ''); // Remove trailing slash if any
-            const filePath = filename.replace(/^\//, ''); // Remove leading slash if any
-    
-            // Construct the full path
-            fullPath = `${folderPath}/${filePath}`;
-            fullPath = normalizePath(fullPath); // Normalize the full path
-
-            console.log('full path 2: ', fullPath);
-
-        }
-    
-        // Attempt to find the file in the vault
-        const file = this.app.vault.getAbstractFileByPath(fullPath);
-        if (file instanceof TFile) {
-            return file;
-        } else {
-            throw new Error('File not found at ' + fullPath);
-        }
+    getCurrentPath() {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) throw new Error('No active file');
+        const currentPath = activeFile.path.split('/');
+        currentPath.pop();
+        const currentPathString = currentPath.join('/');
+        return currentPathString;
     }
     
 

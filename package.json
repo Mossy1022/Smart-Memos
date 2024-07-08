@@ -1,6 +1,6 @@
 {
 	"name": "smart-memos",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"description": "Create personalized and intelligent analysis, summaries, and more for audio recordings that can be imported or spoken directly into a note",
 	"main": "main.js",
 	"scripts": {
@@ -30,12 +30,12 @@
 		"builtin-modules": "3.3.0",
 		"dotenv": "^16.4.5",
 		"esbuild": "0.17.3",
-		"obsidian": "^1.5.7-1",
 		"tslib": "2.4.0",
 		"typescript": "4.7.4"
 	},
 	"dependencies": {
 		"bootstrap": "^5.3.3",
+		"obsidian" : "latest",
 		"smart-chat-model": "^1.0.5",
 		"wavesurfer.js": "^7.8.0"
 	}
