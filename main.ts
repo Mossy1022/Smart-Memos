@@ -61,6 +61,16 @@ export default class SmartMemosPlugin extends Plugin {
             }
 		});
 
+        // Add the record smart memo command
+        this.addCommand({
+            id: 'record-smart-memo',
+            name: 'Record smart memo',
+            editorCallback: async (editor: Editor, view: MarkdownView) => {
+                // Open the audio recorder and store the recorded audio
+                this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this)).open();
+            }
+        });
+
         this.registerMarkdownPostProcessor((el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
             const audioLinks = el.querySelectorAll('a.internal-link[data-href$=".wav"]');
             console.log('audio links: ', audioLinks);
@@ -97,7 +107,6 @@ export default class SmartMemosPlugin extends Plugin {
 
 
          // Add the audio recorder ribbon
-         // Update the callback for the audio recorder ribbon
         this.addRibbonIcon('microphone', 'Record smart memo', async (evt: MouseEvent) => {
             // Open the audio recorder and store the recorded audio
             this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this)).open();
