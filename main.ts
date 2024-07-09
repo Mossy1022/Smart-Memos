@@ -248,53 +248,39 @@ export default class SmartMemosPlugin extends Plugin {
 
     
     async findFilePath(text: string, regex: RegExp[]) {
-        const fullPath = await this.getAttachmentDir().then((attachmentPath) => {
-            let filename = '';
-            let result: RegExpExecArray | null;
-            for (const reg of regex) {
-                while ((result = reg.exec(text)) !== null) {
-                    filename = normalizePath(decodeURI(result[0])).trim();
-                }
+        console.log('dir text: ', text);
+    
+        let filename = '';
+        let result: RegExpExecArray | null;
+    
+        // Extract the filename using the provided regex patterns
+        for (const reg of regex) {
+            while ((result = reg.exec(text)) !== null) {
+                filename = normalizePath(decodeURI(result[0])).trim();
             }
+        }
     
-            if (filename == '') throw new Error('No file found in the text.');
+        if (filename === '') throw new Error('No file found in the text.');
     
-            const fileInSpecificFolder = filename.includes('/');
-            const AttInRootFolder = attachmentPath === '' || attachmentPath === '/';
-            const AttInCurrentFolder = attachmentPath.startsWith('./');
-            const AttInSpecificFolder = !AttInRootFolder && !AttInCurrentFolder;
+        console.log('file name: ', filename);
     
-            let fullPath = '';
+        // Use the filename directly as the full path
+        const fullPath = filename;
     
-            if (AttInRootFolder || fileInSpecificFolder) fullPath = filename;
-            else {
-                if (AttInSpecificFolder) fullPath = attachmentPath + '/' + filename;
-                if (AttInCurrentFolder) {
-                    const attFolder = attachmentPath.substring(2);
-                    if (attFolder.length == 0) fullPath = this.getCurrentPath() + '/' + filename;
-                    else fullPath = this.getCurrentPath() + '/' + attFolder + '/' + filename;
-                }
-            }
+        console.log('full path: ', fullPath);
     
-            // Check if the file exists in the constructed path
-            const exists = this.app.vault.getAbstractFileByPath(fullPath) instanceof TAbstractFile;
-            if (exists) return fullPath;
-            else {
-                // If not found, search through all files in the vault
-                let path = '';
-                let found = false;
-                this.app.vault.getFiles().forEach((file) => {
-                    if (file.name === filename.split('/').pop()) {
-                        path = file.path;
-                        found = true;
-                    }
-                });
-                if (found) return path;
-                else throw new Error('File not found');
-            }
-        });
-        return fullPath as string;
+        // Check if the file exists at the constructed path
+        const fileExists = this.app.vault.getAbstractFileByPath(fullPath) instanceof TAbstractFile;
+        if (fileExists) return fullPath;
+    
+        // If not found, search through all files in the vault
+        const allFiles = this.app.vault.getFiles();
+        const foundFile = allFiles.find(file => file.name === filename.split('/').pop());
+        if (foundFile) return foundFile.path;
+    
+        throw new Error('File not found');
     }
+    
 
 	async generateTranscript(audioBuffer: ArrayBuffer, filetype: string) {
         if (this.settings.apiKey.length <= 1) throw new Error('OpenAI API Key is not provided.');
@@ -366,22 +352,6 @@ export default class SmartMemosPlugin extends Plugin {
         return results.join(' ');
     }
 
-    async getAttachmentDir() {
-        const activeFile = this.app.workspace.getActiveFile();
-        if (!activeFile) throw new Error('No active file');
-        const dir = this.app.vault.getAvailablePathForAttachments(activeFile.basename, activeFile?.extension, activeFile);  // getAvailablePathForAttachments is undocumented
-        console.log('dir: ', dir);
-        return dir;
-    }
-    
-    getCurrentPath() {
-        const activeFile = this.app.workspace.getActiveFile();
-        if (!activeFile) throw new Error('No active file');
-        const currentPath = activeFile.path.split('/');
-        currentPath.pop();
-        const currentPathString = currentPath.join('/');
-        return currentPathString;
-    }
     
 
 	async generateText(prompt: string, editor: Editor, currentLn: number, contextPrompt?: string) {
