@@ -28,7 +28,7 @@ Note* This plugin currently uses online openAI models to recieve and transcribe 
 ## Usage
 Once installed, the Smart Memos Plugin provides an intuitive interface to transcribe your audio files and generate notes.  
 
-- **Adding Audio**: To speak your memo directly into Obsidian, tap the microphone icon or select `Record smart memo` from the command palette (`Ctrl + p` for Windows and `Cmd + p` for Mac)to open the smart memos popup that'll automatically start recording.  To import audio into a note, simply drag and drop an audio file into it.
+- **Adding Audio**: To speak your memo directly into Obsidian, tap the microphone icon that displays "Record smart memo" or select `Record smart memo` from the command palette (`Ctrl + p` for Windows and `Cmd + p` for Mac)to open the smart memos popup that'll automatically start recording.  To import audio into a note, simply drag and drop an audio file into it.
 - **Transcribing Audio**: To transcribe an audio file after it's been imported into a note, move your cursor right underneath the audio file and use the command `Smart transcribe` from the command palette. The plugin will transcribe the audio file and generate detailed notes. If you're speaking directly to Obsidian, you can select the "Smart Transcribe" button to transcribe what you've recorded.
 - **Customizing the Prompt**: You can customize the prompt that will be sent to the AI model before adding your transcribed audio in the plugin settings.
 - **Include Raw Transcript**: If you just want clean notes returned, you can remove the addition of the raw transcript at the end by toggling it off in the settings
