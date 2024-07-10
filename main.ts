@@ -10,13 +10,15 @@ interface AudioPluginSettings {
     apiKey: string;
 	prompt: string;
     includeTranscript: boolean;
+    recordingFilePath: string;
 }
 
 let DEFAULT_SETTINGS: AudioPluginSettings = {
 	model: 'gpt-4-0613',
     apiKey: '',
 	prompt: 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes in markdown language on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention \"the speaker\" anywhere in your response.  The notes your write should be written as if I were writting them. Finally, ensure to end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n',
-    includeTranscript: true
+    includeTranscript: true,
+    recordingFilePath: ''
 }
 
 const MODELS: string[] = [
@@ -133,7 +135,7 @@ export default class SmartMemosPlugin extends Plugin {
 
             // Save the audio recording as a .wav file
             const fileName = `recording-${Date.now()}.wav`;
-            const file = await saveFile(this.app, this.audioFile, fileName, this.appJsonObj.attachmentFolderPath);
+            const file = await saveFile(this.app, this.audioFile, fileName, this.settings.recordingFilePath);
 
             // Insert a link to the audio file in the current note
             const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -476,5 +478,17 @@ class SmartMemosSettingTab extends PluginSettingTab {
                     this.plugin.settings.includeTranscript = value;
                     await this.plugin.saveSettings();
                 }));
+
+        new Setting(containerEl)
+            .setName('Recording File Path')
+            .setDesc('Specify the file path where recordings will be saved. Ex. If you want to put recordings in Resources folder then path is "Resources" (Defaults to root)')
+            .addText(text => text
+                .setPlaceholder('Ex. Resources (if in Resources)')
+                .setValue(this.plugin.settings.recordingFilePath || '')
+                .onChange(async (value) => {
+                    this.plugin.settings.recordingFilePath = value;
+                    await this.plugin.saveSettings();
+                }));
+
 	}
 }
