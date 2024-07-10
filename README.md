@@ -23,7 +23,7 @@ Note* This plugin currently uses online openAI models to recieve and transcribe 
 ## Platforms
 
 - Desktop
-- Mobile
+- Mobile (iOS temporarily unavailable)
 
 ## Usage
 Once installed, the Smart Memos Plugin provides an intuitive interface to transcribe your audio files and generate notes.  
