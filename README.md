@@ -34,8 +34,9 @@ Once installed, the Smart Memos Plugin provides an intuitive interface to transc
 - **Include Raw Transcript**: If you just want clean notes returned, you can remove the addition of the raw transcript at the end by toggling it off in the settings
 - **Specify where audio files are recorded in your vault**: By default, audio recordings will be saved to your root vault folder.  If you want to store audio recordings in a specific folder, you can change it in the settings of this plugin. I.e if you want them to be saved in a 'Recordings' folder within your 'Resources' folder, you can set the settings value to Resources/Recordings.
 
-
-
+## Coming Soon!
+- **Smart Templates**: Given the seemingly infinite use cases, I'm working with Brian (creator of smart connections) to integrate "Smart Templates", a templating feature that will be available in Obsidian within the coming weeks.
+- **Local Model Transcription**:  This is a high priority since it's understandable not as many are as comfortable having their voice audio sent out online to be transcribed. 
 
 ## Vision
 The Smart Memos plugin aims to revolutionize the way we capture and understand information from audio sources. By leveraging advanced AI models, the plugin can transcribe audio files and generate fully customizable notes, in-depth analysis, and idea expansion, freeing you from the tedious task of manual transcription and note-taking, while simultaneously expanding upon them to allow your two "brains" to work harmoneously.
