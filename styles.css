@@ -1,10 +1,9 @@
-.smart-settings{
-    textarea {
+.smart-memos-settings {
+    .setting-item-control textarea {
         width: 350px;
         height: 400px;
     }
 }
-
 
 body .modal-container .modal.smart-memo-paused {
     position: fixed;

@@ -21,6 +21,30 @@ import ejs from "ejs";
 import { SmartMemosAudioRecordModal } from './SmartMemosAudioRecordModal'; // Update with the correct path
 import { saveFile } from 'Utils';
 
+class ExtendedSmartEnv extends SmartEnv {
+    chunk_handler: (chunk: string) => void;
+    done_handler: (final_resp: string) => void;
+}
+
+
+interface AudioPluginSettings {
+	model: string;
+    apiKey: string;
+	prompt: string;
+    includeTranscript: boolean;
+    recordingFilePath: string;
+}
+
+let DEFAULT_SETTINGS: AudioPluginSettings = {
+	model: 'gpt-4-0613',
+    apiKey: '',
+	prompt: 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes in markdown language on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention \"the speaker\" anywhere in your response.  The notes your write should be written as if I were writting them. Finally, ensure to end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n',
+    includeTranscript: true,
+    recordingFilePath: ''
+}
+
+
+
 export default class SmartMemosPlugin extends Plugin {
     writing: boolean;
     transcript: string;
@@ -35,7 +59,7 @@ export default class SmartMemosPlugin extends Plugin {
 
     settings: any;
     active_template: string | null = null;
-    env: SmartEnv;
+    env: ExtendedSmartEnv;
     obsidian: any;
 
     async onload() {
@@ -61,6 +85,17 @@ export default class SmartMemosPlugin extends Plugin {
                 this.commandGenerateTranscript(editor);
             }
         });
+
+        this.addCommand({
+            id: 'record-smart-memo',
+            name: 'Record smart memo',
+            editorCallback: async (editor: Editor, view: MarkdownView) => {
+                // Open the audio recorder and store the recorded audio
+                this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this)).open();
+
+            }
+        });
+
 
         this.registerMarkdownPostProcessor((el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
             const audioLinks = el.querySelectorAll('a.internal-link[data-href$=".wav"]');
@@ -143,7 +178,7 @@ export default class SmartMemosPlugin extends Plugin {
 
             // Save the audio recording as a .wav file
             const fileName = `recording-${Date.now()}.wav`;
-            const file = await saveFile(this.app, this.audioFile, fileName, this.appJsonObj.attachmentFolderPath);
+            const file = await saveFile(this.app, this.audioFile, fileName, this.settings.recordingFilePath);
 
             // Insert a link to the audio file in the current note
             const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -219,35 +254,80 @@ export default class SmartMemosPlugin extends Plugin {
     commandGenerateTranscript(editor: Editor) {
         const position = editor.getCursor();
         const text = editor.getRange({ line: 0, ch: 0 }, position);
-        const regex = [/(?<=\[\[)(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=]])/g,
-            /(?<=\[(.*)]\()(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=\))/g];
-        this.findFilePath(text, regex).then((audioFile: TFile) => {
-            this.app.vault.readBinary(audioFile).then((audioBuffer) => {
-                if (this.writing) {
-                    new Notice('Generator is already in progress.');
-                    return;
-                }
-                this.writing = true;
-                new Notice("Generating transcript...");
-                const fileType = audioFile.extension;
-                this.generateTranscript(audioBuffer, fileType).then((result) => {
-                    this.transcript = result;
-                    const prompt = this.settings.prompt + result;
-                    new Notice('Transcript generated...');
-                    this.generateText(prompt, editor, editor.getCursor('to').line);
-                }).catch(error => {
-                    console.warn(error.message);
-                    new Notice(error.message);
-                    this.writing = false;
+        const regex = [
+            /(?<=\[\[)(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=]])/g,
+            /(?<=\[(.*)]\()(([^[\]])+)\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)(?=\))/g
+        ];
+        this.findFilePath(text, regex).then((path) => {
+            const fileType = path.split('.').pop();
+            if (fileType == undefined || fileType == null || fileType == '') {
+                new Notice('No audio file found');
+            } else {
+                this.app.vault.adapter.exists(path).then((exists) => {
+                    if (!exists) throw new Error(path + ' does not exist');
+                    this.app.vault.adapter.readBinary(path).then((audioBuffer) => {
+                        if (this.writing) {
+                            new Notice('Generator is already in progress.');
+                            return;
+                        }
+                        this.writing = true;
+                        new Notice("Generating transcript...");
+                        this.generateTranscript(audioBuffer, fileType).then((result) => {
+                            this.transcript = result;
+                            const prompt = this.settings.prompt + result;
+                            new Notice('Transcript generated...');
+                            this.generateText(prompt, editor, editor.getCursor('to').line);
+                        }).catch(error => {
+                            console.warn(error.message);
+                            new Notice(error.message);
+                            this.writing = false;
+                        });
+                    });
                 });
-            });
+            }
         }).catch(error => {
             console.warn(error.message);
             new Notice(error.message);
         });
     }
 
-    async generateTranscript(audioBuffer: ArrayBuffer, filetype: string) {
+    
+    async findFilePath(text: string, regex: RegExp[]) {
+        console.log('dir text: ', text);
+    
+        let filename = '';
+        let result: RegExpExecArray | null;
+    
+        // Extract the filename using the provided regex patterns
+        for (const reg of regex) {
+            while ((result = reg.exec(text)) !== null) {
+                filename = normalizePath(decodeURI(result[0])).trim();
+            }
+        }
+    
+        if (filename === '') throw new Error('No file found in the text.');
+    
+        console.log('file name: ', filename);
+    
+        // Use the filename directly as the full path
+        const fullPath = filename;
+    
+        console.log('full path: ', fullPath);
+    
+        // Check if the file exists at the constructed path
+        const fileExists = this.app.vault.getAbstractFileByPath(fullPath) instanceof TAbstractFile;
+        if (fileExists) return fullPath;
+    
+        // If not found, search through all files in the vault
+        const allFiles = this.app.vault.getFiles();
+        const foundFile = allFiles.find(file => file.name === filename.split('/').pop());
+        if (foundFile) return foundFile.path;
+    
+        throw new Error('File not found');
+    }
+    
+
+	async generateTranscript(audioBuffer: ArrayBuffer, filetype: string) {
         if (this.settings.apiKey.length <= 1) throw new Error('OpenAI API Key is not provided.');
 
         // Reference: www.stackoverflow.com/questions/74276173/how-to-send-multipart-form-data-payload-with-typescript-obsidian-library
@@ -303,9 +383,10 @@ export default class SmartMemosPlugin extends Plugin {
                 if (error.message.includes('401')) throw new Error('OpenAI API Key is not valid.');
                 else throw error;
             });
-
+            
             if ('text' in response.json) {
                 // Add the result to the results array
+                // @ts-ignore
                 results.push(response.json.text);
             }
             else throw new Error('Error. ' + JSON.stringify(response.json));
@@ -317,47 +398,7 @@ export default class SmartMemosPlugin extends Plugin {
         return results.join(' ');
     }
 
-    async findFilePath(text: string, regex: RegExp[]) {
-        let filename = '';
-        let result: RegExpExecArray | null;
-
-        // Find the filename using the provided regex patterns
-        for (const reg of regex) {
-            while ((result = reg.exec(text)) !== null) {
-                filename = normalizePath(decodeURI(result[0])).trim();
-            }
-        }
-
-        if (filename === '') {
-            throw new Error('No file found in the text.');
-        }
-
-        let fullPath;
-        if (filename.includes(this.appJsonObj.attachmentFolderPath)) {
-            fullPath = filename;
-            console.log('full path 1: ', fullPath);
-        } else {
-
-            // Ensure no leading or trailing slashes in the attachment folder path and filename
-            const folderPath = this.appJsonObj.attachmentFolderPath.replace(/\/$/, ''); // Remove trailing slash if any
-            const filePath = filename.replace(/^\//, ''); // Remove leading slash if any
-
-            // Construct the full path
-            fullPath = `${folderPath}/${filePath}`;
-            fullPath = normalizePath(fullPath); // Normalize the full path
-
-            console.log('full path 2: ', fullPath);
-
-        }
-
-        // Attempt to find the file in the vault
-        const file = this.app.vault.getAbstractFileByPath(fullPath);
-        if (file instanceof TFile) {
-            return file;
-        } else {
-            throw new Error('File not found at ' + fullPath);
-        }
-    }
+    
 
     async generateText(prompt: string, editor: Editor, currentLn: number, contextPrompt?: string) {
         if (prompt.length < 1) throw new Error('Cannot find prompt.');
@@ -367,7 +408,7 @@ export default class SmartMemosPlugin extends Plugin {
 
         let newPrompt = prompt;
 
-        const messages = [];
+        const messages: { role: string; content: string }[] = [];
 
         messages.push({
             role: 'user',
@@ -422,12 +463,14 @@ class SmartMemosSettingTab extends PluginSettingTab {
         this.config = plugin.settings;
     }
     display() {
-        this.smart_settings = new SmartMemosSettings(this.plugin.env, this.containerEl, "settings");
+        this.smart_settings = new SmartMemosSettings(this.plugin.env, this.containerEl, "smart-memos-settings");
         return this.smart_settings.render();
     }
 }
+
 import { SmartChatModel } from "smart-chat-model";
 import { SmartSettings } from "smart-setting";
+
 // Smart Templates Specific Settings
 class SmartMemosSettings extends SmartSettings {
     get settings() { return this.env.smart_memos_plugin.settings; }
@@ -451,6 +494,8 @@ class SmartMemosSettings extends SmartSettings {
             platform_chat_models,
             chat_platform: smart_chat_model.platform,
             settings: this.settings,
+            //@ts-ignore
+            hasSmartConnections: (!window.SmartSearch)
         };
     }
     get template() { return this.env.views[this.template_name]; }
