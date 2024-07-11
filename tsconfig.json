@@ -7,9 +7,10 @@
     "module": "ESNext",
     "target": "ES6",
     "allowJs": true,
-    "noImplicitAny": true,
+    "noImplicitAny": false,
     "moduleResolution": "node",
     "importHelpers": true,
+    "resolveJsonModule": true,
     "isolatedModules": true,
 	"strictNullChecks": true,
     "lib": [
