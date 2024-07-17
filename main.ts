@@ -16,7 +16,6 @@ import {
 // import Obsidian from 'obsidian';
 import { SmartEnv } from 'smart-environment';
 import views from "./dist/views.json";
-import ejs from "ejs";
 
 import { SmartMemosAudioRecordModal } from './SmartMemosAudioRecordModal'; // Update with the correct path
 import { saveFile } from 'Utils';
@@ -68,8 +67,6 @@ export default class SmartMemosPlugin extends Plugin {
         };
         await this.load_settings();
         this.env = SmartEnv.create(this, {
-            ejs: ejs,
-            // settings: this.settings,
             views: views,
             global_ref: window,
         });
