@@ -11,6 +11,7 @@ interface AudioPluginSettings {
 	prompt: string;
     includeTranscript: boolean;
     recordingFilePath: string;
+    keepAudio: boolean;
 }
 
 let DEFAULT_SETTINGS: AudioPluginSettings = {
@@ -18,7 +19,8 @@ let DEFAULT_SETTINGS: AudioPluginSettings = {
     apiKey: '',
 	prompt: 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes in markdown language on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention \"the speaker\" anywhere in your response.  The notes your write should be written as if I were writting them. Finally, ensure to end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n',
     includeTranscript: true,
-    recordingFilePath: ''
+    recordingFilePath: '',
+    keepAudio: true
 }
 
 const MODELS: string[] = [
@@ -38,7 +40,6 @@ export default class SmartMemosPlugin extends Plugin {
 	settings: AudioPluginSettings;
 	writing: boolean;
 	transcript: string;
-
 	apiKey: string = 'sk-as123mkqwenjasdasdj12...';
     model: string = 'gpt-4-0613';
 
@@ -68,7 +69,7 @@ export default class SmartMemosPlugin extends Plugin {
             name: 'Record smart memo',
             editorCallback: async (editor: Editor, view: MarkdownView) => {
                 // Open the audio recorder and store the recorded audio
-                this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this)).open();
+                this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this), this.settings).open();
 
             }
         });
@@ -113,7 +114,7 @@ export default class SmartMemosPlugin extends Plugin {
          // Update the callback for the audio recorder ribbon
         this.addRibbonIcon('microphone', 'Record smart memo', async (evt: MouseEvent) => {
             // Open the audio recorder and store the recorded audio
-            this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this)).open();
+            this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this), this.settings).open();
 
         });
 
@@ -122,7 +123,7 @@ export default class SmartMemosPlugin extends Plugin {
 	}
 
     // Add a new method to handle the audio recording and processing
-    async handleAudioRecording(audioFile: Blob, transcribe: boolean) {
+    async handleAudioRecording(audioFile: Blob, transcribe: boolean, keepAudio: boolean) {
         try {
             console.log('Handling audio recording:', audioFile);
 
@@ -137,16 +138,23 @@ export default class SmartMemosPlugin extends Plugin {
             const fileName = `recording-${Date.now()}.wav`;
             const file = await saveFile(this.app, this.audioFile, fileName, this.settings.recordingFilePath);
 
-            // Insert a link to the audio file in the current note
-            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-            if (activeView) {
-                const editor = activeView.editor;
-                const cursor = editor.getCursor();
-                const link = `![[${file.path}]]`;
-                editor.replaceRange(link, cursor);
+            this.settings.keepAudio = keepAudio;
 
-                // Trigger a change in the editor to force Obsidian to re-render the note
-                editor.replaceRange('', { line: cursor.line, ch: cursor.ch }, { line: cursor.line, ch: cursor.ch });
+            this.saveSettings();
+
+            // Only save the audio file if keepAudio is true
+            if (keepAudio) { 
+                // Insert a link to the audio file in the current note
+                const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+                if (activeView) {
+                    const editor = activeView.editor;
+                    const cursor = editor.getCursor();
+                    const link = `![[${file.path}]]`;
+                    editor.replaceRange(link, cursor);
+    
+                    // Trigger a change in the editor to force Obsidian to re-render the note
+                    editor.replaceRange('', { line: cursor.line, ch: cursor.ch }, { line: cursor.line, ch: cursor.ch });
+                }
             }
 
             // Transcribe the audio file if the transcribe parameter is true
@@ -154,9 +162,6 @@ export default class SmartMemosPlugin extends Plugin {
                 this.transcribeRecording(file);
             }
 
-            // Handle the saved audio file
-            // You can replace this with your own handling logic
-            console.log(file);
         } catch (error) {
             console.error('Error handling audio recording:', error);
             new Notice('Failed to handle audio recording');

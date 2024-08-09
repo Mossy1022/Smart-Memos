@@ -5,7 +5,7 @@ export class SmartMemosAudioRecordModal extends Modal {
     private chunks: BlobPart[] = [];
     private resolve: (value: Blob | PromiseLike<Blob>) => void;
     private reject: (reason?: any) => void;
-    private handleAudioRecording: (audioFile: Blob | null, transcribe: boolean) => void;
+    private handleAudioRecording: (audioFile: Blob | null, transcribe: boolean, keepAudio: boolean) => void;
     private isRecording: boolean = false;
     private timer: HTMLElement;
     private intervalId: number | null = null;
@@ -13,10 +13,13 @@ export class SmartMemosAudioRecordModal extends Modal {
     private elapsedTime: number = 0; // To keep track of the elapsed time
     private redDot: HTMLElement;
     private isResetting: boolean = false; // Flag to track reset state
+    private keepAudioCheckbox: HTMLElement; // Add a property for the checkbox
+    private settings: any;
 
-    constructor(app: any, handleAudioRecording: (audioFile: Blob | null, transcribe: boolean) => void) {
+    constructor(app: any, handleAudioRecording: (audioFile: Blob | null, transcribe: boolean, keepAudio: boolean) => void, settings: any) {
         super(app);
         this.handleAudioRecording = handleAudioRecording;
+        this.settings = settings; // Initialize settings
     }
 
     onOpen() {
@@ -53,7 +56,7 @@ export class SmartMemosAudioRecordModal extends Modal {
 
         stopButton.addEventListener('click', async () => {
             const audioFile = await this.stopRecording();
-            this.handleAudioRecording(audioFile, false);
+            this.handleAudioRecording(audioFile, false, (this.keepAudioCheckbox as HTMLInputElement).checked);
         });
 
         playPauseButton.addEventListener('click', () => {
@@ -77,7 +80,7 @@ export class SmartMemosAudioRecordModal extends Modal {
 
         transcribeButton.addEventListener('click', async () => {
             const audioFile = await this.stopRecording();
-            this.handleAudioRecording(audioFile, true);
+            this.handleAudioRecording(audioFile, true, (this.keepAudioCheckbox as HTMLInputElement).checked);
         });
 
         setIcon(transcribeButton, 'file-text'); // Initially set to bulb
@@ -103,6 +106,12 @@ export class SmartMemosAudioRecordModal extends Modal {
             // Ensure red dot stops pulsing
             this.redDot.classList.remove('smart-memo-pulse-animation');
         });
+        // Add the checkbox
+        const keepAudioContainer = contentEl.createDiv({ cls: 'smart-memo-keep-audio-container' });
+        this.keepAudioCheckbox = keepAudioContainer.createEl('input', { type: 'checkbox', cls: 'smart-memo-keep-audio-checkbox' });
+        (this.keepAudioCheckbox as HTMLInputElement).checked = this.settings.keepAudio // Set checked based on settings;
+        const keepAudioLabel = keepAudioContainer.createEl('label', { text: 'Keep Audio File', cls: 'smart-memo-keep-audio-label' });
+        keepAudioLabel.htmlFor = this.keepAudioCheckbox.id;
 
         // Start recording immediately upon opening the modal
         this.startRecording();
