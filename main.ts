@@ -12,6 +12,7 @@ interface AudioPluginSettings {
     includeTranscript: boolean;
     recordingFilePath: string;
     keepAudio: boolean;
+    includeAudioFileLink : boolean;
 }
 
 let DEFAULT_SETTINGS: AudioPluginSettings = {
@@ -20,7 +21,8 @@ let DEFAULT_SETTINGS: AudioPluginSettings = {
 	prompt: 'You are an expert note-making AI for obsidian who specializes in the Linking Your Thinking (LYK) strategy.  The following is a transcription of recording of someone talking aloud or people in a conversation. There may be a lot of random things said given fluidity of conversation or thought process and the microphone\'s ability to pick up all audio.  Give me detailed notes in markdown language on what was said in the most easy-to-understand, detailed, and conceptual format.  Include any helpful information that can conceptualize the notes further or enhance the ideas, and then summarize what was said.  Do not mention \"the speaker\" anywhere in your response.  The notes your write should be written as if I were writting them. Finally, ensure to end with code for a mermaid chart that shows an enlightening concept map combining both the transcription and the information you added to it.  The following is the transcribed audio:\n\n',
     includeTranscript: true,
     recordingFilePath: '',
-    keepAudio: true
+    keepAudio: true,
+    includeAudioFileLink: false
 }
 
 const MODELS: string[] = [
@@ -124,7 +126,7 @@ export default class SmartMemosPlugin extends Plugin {
 	}
 
     // Add a new method to handle the audio recording and processing
-    async handleAudioRecording(audioFile: Blob, transcribe: boolean, keepAudio: boolean) {
+    async handleAudioRecording(audioFile: Blob, transcribe: boolean, keepAudio: boolean, includeAudioFileLink: boolean) {
         try {
             console.log('Handling audio recording:', audioFile);
 
@@ -140,11 +142,11 @@ export default class SmartMemosPlugin extends Plugin {
             const file = await saveFile(this.app, this.audioFile, fileName, this.settings.recordingFilePath);
 
             this.settings.keepAudio = keepAudio;
-
+            this.settings.includeAudioFileLink = includeAudioFileLink;
             this.saveSettings();
 
-            // Only save the audio file if keepAudio is true
-            if (keepAudio) { 
+            // Only save the audio file if use wants to include it and they are keeping the audio
+            if (includeAudioFileLink && keepAudio) { 
                 // Insert a link to the audio file in the current note
                 const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
                 if (activeView) {
@@ -191,6 +193,10 @@ export default class SmartMemosPlugin extends Plugin {
                 const prompt = this.settings.prompt + result;
                 new Notice('Transcript generated...');
                 this.generateText(prompt, editor , editor.getCursor('to').line);
+                //if keepAudio is false and delete the audio file if so
+                if (!this.settings.keepAudio) {
+                    this.app.vault.delete(audioFile); // Delete the audio file
+                }
             }).catch(error => {
                 console.warn(error.message);
                 new Notice(error.message);
@@ -493,6 +499,26 @@ class SmartMemosSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.recordingFilePath || '')
                 .onChange(async (value) => {
                     this.plugin.settings.recordingFilePath = value;
+                    await this.plugin.saveSettings();
+                }));
+        
+        new Setting(containerEl)
+        .setName('Save Audio File')
+        .setDesc('Toggle this setting if you want to save/remove the audio file after it has been transcribed.')
+        .addToggle(toggle => toggle
+            .setValue(this.plugin.settings.keepAudio) 
+            .onChange(async (value) => {
+                this.plugin.settings.keepAudio = value;
+                await this.plugin.saveSettings();
+            }));
+    
+        new Setting(containerEl)
+            .setName('Include Audio Player')
+            .setDesc('Toggle this setting if you want the audio file player to be displayed along with the transcription.')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.includeAudioFileLink) 
+                .onChange(async (value) => {
+                    this.plugin.settings.includeAudioFileLink = value;
                     await this.plugin.saveSettings();
                 }));
 

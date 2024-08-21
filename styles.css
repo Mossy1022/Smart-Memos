@@ -191,6 +191,10 @@ body .modal-container .modal.smart-memo-recording {
     animation-play-state: paused;
 }
 
+.smart-memo-keep-audio-container {
+    margin-bottom: -20px;
+}
+
 /* Add this CSS to your existing stylesheet */
 body .modal-container .modal .smart-memo-modal-button:focus,
 body .modal-container .modal .smart-memo-modal-button:focus-visible {
