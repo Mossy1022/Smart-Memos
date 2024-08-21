@@ -32,7 +32,8 @@ const MODELS: string[] = [
 	'code-davinci-001',
 	'gpt-4-0613',
 	'gpt-4-32k-0613',
-	'gpt-4o'
+	'gpt-4o',
+    'gpt-4o-mini'
 ];
   
 
