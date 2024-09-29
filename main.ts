@@ -48,6 +48,9 @@ export default class SmartMemosPlugin extends Plugin {
 
     appJsonObj : any;
 
+    private audioContext: AudioContext;
+
+
     // Add a new property to store the audio file
     audioFile: Blob;
 
@@ -57,6 +60,8 @@ export default class SmartMemosPlugin extends Plugin {
 
         const app_json = await this.app.vault.adapter.read(".obsidian/app.json");
         this.appJsonObj = JSON.parse(app_json);
+
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
 
 
 		this.addCommand({
@@ -292,77 +297,183 @@ export default class SmartMemosPlugin extends Plugin {
         throw new Error('File not found');
     }
     
-
-	async generateTranscript(audioBuffer: ArrayBuffer, filetype: string) {
+    async generateTranscript(audioBuffer: ArrayBuffer, filetype: string): Promise<string> {
         if (this.settings.apiKey.length <= 1) throw new Error('OpenAI API Key is not provided.');
     
-        // Reference: www.stackoverflow.com/questions/74276173/how-to-send-multipart-form-data-payload-with-typescript-obsidian-library
-        const N = 16 // The length of our random boundry string
-        const randomBoundryString = 'WebKitFormBoundary' + Array(N + 1).join((Math.random().toString(36) + '00000000000000000').slice(2, 18)).slice(0, N)
-        const pre_string = `------${randomBoundryString}\r\nContent-Disposition: form-data; name="file"; filename="audio.mp3"\r\nContent-Type: "application/octet-stream"\r\n\r\n`;
-        const post_string = `\r\n------${randomBoundryString}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n------${randomBoundryString}--\r\n`
-        const pre_string_encoded = new TextEncoder().encode(pre_string);
-        const post_string_encoded = new TextEncoder().encode(post_string);
+        try {
+            // Step 1: Decode Audio Data
+            const decodedAudioData = await this.audioContext.decodeAudioData(audioBuffer);
     
-        // Calculate the size of each chunk
-        const chunkSize = 20 * 1024 * 1024; // 15 MB
+            // Optional: Downsample the audio to 16 kHz for Whisper
+            const targetSampleRate = 16000;
+            const downsampledAudioBuffer = await this.downsampleAudioBuffer(decodedAudioData, targetSampleRate);
     
-        // Calculate the number of chunks
-        const numChunks = Math.ceil(audioBuffer.byteLength / chunkSize);
+            // Step 2: Split Audio Buffer into chunks less than 25 MB
+            const chunkDuration = 600; // in seconds (10 minutes)
+            const audioChunks = this.splitAudioBuffer(downsampledAudioBuffer, chunkDuration);
     
-        if (numChunks < 2) {
-            new Notice(`Transcribing audio...`);
-        } else {
-            new Notice(`Transcribing audio in ${numChunks} chunks. This may take a minute or two...`);
-        }
-
-
-        // Create an array to store the results
-        let results = [];
-
-        // Process each chunk
-        for (let i = 0; i < numChunks; i++) {
+            let results: string[] = [];
     
-            new Notice(`Transcribing chunk #${i + 1}...`);
-
-            // Get the start and end indices for this chunk
-            const start = i * chunkSize;
-            const end = Math.min(start + chunkSize, audioBuffer.byteLength);
+            for (let i = 0; i < audioChunks.length; i++) {
+                new Notice(`Transcribing chunk #${i + 1} of ${audioChunks.length}...`);
     
-            // Extract the chunk from the audio buffer
-            const chunk = audioBuffer.slice(start, end);
+                // Step 3: Encode Chunk to WAV
+                const wavArrayBuffer = this.encodeAudioBufferToWav(audioChunks[i]);
     
-            // Concatenate the chunk with the pre and post strings
-            const concatenated = await new Blob([pre_string_encoded, chunk, post_string_encoded]).arrayBuffer()
+                // Check the size of the encoded WAV file
+                const sizeInMB = wavArrayBuffer.byteLength / (1024 * 1024);
+                if (sizeInMB > 24) {
+                    throw new Error('Chunk size exceeds 25 MB limit.');
+                }
     
-            const options: RequestUrlParam = {
-                url: 'https://api.openai.com/v1/audio/transcriptions',
-                method: 'POST',
-                contentType: `multipart/form-data; boundary=----${randomBoundryString}`,
-                headers: {
-                    'Authorization': 'Bearer ' + this.settings.apiKey
-                },
-                body: concatenated
-            };
+                // Step 4: Send Chunk to Whisper API
+                const formData = new FormData();
+                const blob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
+                formData.append('file', blob, 'audio.wav');
+                formData.append('model', 'whisper-1');
     
-            const response = await requestUrl(options).catch((error) => { 
-                if (error.message.includes('401')) throw new Error('OpenAI API Key is not valid.');
-                else throw error; 
-            });
+                const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.settings.apiKey
+                    },
+                    body: formData
+                });
     
-            if ('text' in response.json) {
-                // Add the result to the results array
-                results.push(response.json.text);
+                const result = await response.json();
+                if (response.ok && result.text) {
+                    results.push(result.text);
+                } else {
+                    throw new Error(`Error: ${result.error.message}`);
+                }
+    
+                // Wait a bit between requests to avoid rate limits
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
-            else throw new Error('Error. ' + JSON.stringify(response.json));
-
-            // Wait for 1 second before processing the next chunk
-            await new Promise(resolve => setTimeout(resolve, 1000));
+    
+            return results.join(' ');
+    
+        } catch (error) {
+            console.error('Transcription failed:', error);
+            if (error.message.includes('401')) {
+                throw new Error('OpenAI API Key is not valid.');
+            } else if (error.message.includes('400')) {
+                throw new Error('Bad Request. Please check the format of the request.');
+            } else {
+                throw error;
+            }
         }
-        // Return all the results
-        return results.join(' ');
     }
 
+    async downsampleAudioBuffer(audioBuffer: AudioBuffer, targetSampleRate: number): Promise<AudioBuffer> {
+        const numberOfChannels = audioBuffer.numberOfChannels;
+        const duration = audioBuffer.duration;
+    
+        const offlineContext = new OfflineAudioContext(numberOfChannels, targetSampleRate * duration, targetSampleRate);
+    
+        // Create buffer source
+        const bufferSource = offlineContext.createBufferSource();
+        bufferSource.buffer = audioBuffer;
+    
+        // Connect the buffer source to the offline context destination
+        bufferSource.connect(offlineContext.destination);
+    
+        // Start rendering
+        bufferSource.start(0);
+        const renderedBuffer = await offlineContext.startRendering();
+    
+        return renderedBuffer;
+    }
+    
+    splitAudioBuffer(audioBuffer: AudioBuffer, chunkDuration: number): AudioBuffer[] {
+        const numberOfChannels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const totalSamples = audioBuffer.length;
+    
+        const chunks: AudioBuffer[] = [];
+        let offset = 0;
+        const samplesPerChunk = Math.floor(chunkDuration * sampleRate);
+    
+        while (offset < totalSamples) {
+            const chunkSamples = Math.min(samplesPerChunk, totalSamples - offset);
+            const chunkBuffer = new AudioBuffer({
+                length: chunkSamples,
+                numberOfChannels: numberOfChannels,
+                sampleRate: sampleRate,
+            });
+    
+            for (let channel = 0; channel < numberOfChannels; channel++) {
+                const channelData = audioBuffer.getChannelData(channel).subarray(offset, offset + chunkSamples);
+                chunkBuffer.copyToChannel(channelData, channel, 0);
+            }
+    
+            chunks.push(chunkBuffer);
+            offset += chunkSamples;
+        }
+    
+        return chunks;
+    }
+    
+    encodeAudioBufferToWav(audioBuffer: AudioBuffer): ArrayBuffer {
+        const numChannels = audioBuffer.numberOfChannels;
+        const sampleRate = audioBuffer.sampleRate;
+        const format = 1; // PCM
+        const bitDepth = 16;
+    
+        const numSamples = audioBuffer.length * numChannels;
+        const buffer = new ArrayBuffer(44 + numSamples * 2);
+        const view = new DataView(buffer);
+    
+        /* RIFF identifier */
+        this.writeString(view, 0, 'RIFF');
+        /* file length */
+        view.setUint32(4, 36 + numSamples * 2, true);
+        /* RIFF type */
+        this.writeString(view, 8, 'WAVE');
+        /* format chunk identifier */
+        this.writeString(view, 12, 'fmt ');
+        /* format chunk length */
+        view.setUint32(16, 16, true);
+        /* sample format (raw) */
+        view.setUint16(20, format, true);
+        /* channel count */
+        view.setUint16(22, numChannels, true);
+        /* sample rate */
+        view.setUint32(24, sampleRate, true);
+        /* byte rate (sample rate * block align) */
+        view.setUint32(28, sampleRate * numChannels * bitDepth / 8, true);
+        /* block align (channel count * bytes per sample) */
+        view.setUint16(32, numChannels * bitDepth / 8, true);
+        /* bits per sample */
+        view.setUint16(34, bitDepth, true);
+        /* data chunk identifier */
+        this.writeString(view, 36, 'data');
+        /* data chunk length */
+        view.setUint32(40, numSamples * 2, true);
+    
+        // Write interleaved data
+        let offset = 44;
+        for (let i = 0; i < audioBuffer.length; i++) {
+            for (let channel = 0; channel < numChannels; channel++) {
+                let sample = audioBuffer.getChannelData(channel)[i];
+                // Clip sample
+                sample = Math.max(-1, Math.min(1, sample));
+                // Scale to 16-bit integer
+                sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+                view.setInt16(offset, sample, true);
+                offset += 2;
+            }
+        }
+    
+        return buffer;
+    }
+    
+    writeString(view: DataView, offset: number, string: string): void {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    }
+    
     
 
 	async generateText(prompt: string, editor: Editor, currentLn: number, contextPrompt?: string) {
