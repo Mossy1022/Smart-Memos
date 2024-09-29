@@ -18,7 +18,9 @@ Getting started with the Smart Memos Plugin is easy. Follow these steps to insta
 1. Download and install the Smart Memos Plugin from the Obsidian Community Plugins.
 2. Configure the plugin settings with your OpenAI API Key and preferred AI model.
 
-Note* This plugin currently uses online openAI models to recieve and transcribe your voice memos.  Looking to add Local AI Models in the near future. OpenAI's retention policy retains text up to 30 days, but does not retain any audio data. 
+**Note** This plugin currently uses online openAI models to recieve and transcribe your voice memos.  Looking to add Local AI Models in the near future. OpenAI's retention policy retains text up to 30 days, but does not retain any audio data. 
+
+**Another Note:** If you have the native record feature in Obsidian turned on, it must be turned off for audio to record using Smart Memos.
 
 ## Platforms
 
@@ -34,7 +36,7 @@ Once installed, the Smart Memos Plugin provides an intuitive interface to transc
 - **Include Raw Transcript**: If you just want clean notes returned, you can remove the addition of the raw transcript at the end by toggling it off in the settings
 - **Specify where audio files are recorded in your vault**: By default, audio recordings will be saved to your root vault folder.  If you want to store audio recordings in a specific folder, you can change it in the settings of this plugin. I.e if you want them to be saved in a 'Recordings' folder within your 'Resources' folder, you can set the settings value to Resources/Recordings.
 
-## Coming Soon!
+## Coming Soon(ish)!
 - **Smart Templates**: Given the seemingly infinite use cases, I'm working with Brian (creator of smart connections) to integrate "Smart Templates", a templating feature that will be available in Obsidian within the coming weeks.
 - **Local Model Transcription**:  This is a high priority since it's understandable not as many are as comfortable having their voice audio sent out online to be transcribed. 
 
