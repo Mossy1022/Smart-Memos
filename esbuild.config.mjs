@@ -16,23 +16,40 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = (process.argv[2] === "production");
 
-const copy_to_plugins = {
-	name: 'copy_to_plugins',
+const copy_files_plugin = {
+	name: 'copy_files',
 	setup(build) {
 		build.onEnd(() => {
-			const plugin_path = path.join(process.env.OBSIDIAN_PLUGINS_PATH, "smart-memos");
-			
-			if (!fs.existsSync(plugin_path)) {
-				fs.mkdirSync(plugin_path);
+			// Ensure build directory exists
+			const buildDir = "./build";
+			if (!fs.existsSync(buildDir)) {
+				fs.mkdirSync(buildDir, { recursive: true });
 			}
 			
-			fs.copyFileSync("./main.js", path.join(plugin_path, "main.js"));
-			fs.copyFileSync("./manifest.json", path.join(plugin_path, "manifest.json"));
-			fs.copyFileSync("./styles.css", path.join(plugin_path, "styles.css"));
-			// add empty .hotreload file
-			fs.writeFileSync(path.join(plugin_path, ".hotreload"), "");
+			// Copy required files to build directory
+			fs.copyFileSync("./manifest.json", path.join(buildDir, "manifest.json"));
+			fs.copyFileSync("./styles.css", path.join(buildDir, "styles.css"));
+			fs.copyFileSync("./versions.json", path.join(buildDir, "versions.json"));
 			
-			console.log("Plugin built and copied to obsidian plugins folder");
+			// Copy to Obsidian plugins folder if path is set
+			if (process.env.OBSIDIAN_PLUGINS_PATH) {
+				const plugin_path = path.join(process.env.OBSIDIAN_PLUGINS_PATH, "smart-memos");
+				
+				if (!fs.existsSync(plugin_path)) {
+					fs.mkdirSync(plugin_path, { recursive: true });
+				}
+				
+				fs.copyFileSync(path.join(buildDir, "main.js"), path.join(plugin_path, "main.js"));
+				fs.copyFileSync(path.join(buildDir, "manifest.json"), path.join(plugin_path, "manifest.json"));
+				fs.copyFileSync(path.join(buildDir, "styles.css"), path.join(plugin_path, "styles.css"));
+				fs.copyFileSync(path.join(buildDir, "versions.json"), path.join(plugin_path, "versions.json"));
+				// add empty .hotreload file
+				fs.writeFileSync(path.join(plugin_path, ".hotreload"), "");
+				
+				console.log("Plugin built to ./build/ and copied to obsidian plugins folder");
+			} else {
+				console.log("Plugin built to ./build/ folder");
+			}
 		});
 	}
 };
@@ -63,9 +80,9 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: "inline",
 	treeShaking: true,
-	outfile: "main.js",
+	outfile: "build/main.js",
 	plugins: [
-		copy_to_plugins
+		copy_files_plugin
 	]
 });
 if(!prod) await context.watch();
