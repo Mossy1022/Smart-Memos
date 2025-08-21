@@ -144,7 +144,6 @@ body .modal-container .modal.smart-memo-recording {
     color: var(--text-on-accent);
 
     font-size: 20px; /* Adjust the font size if needed */
-    margin-bottom: 10px; /* Adjust the spacing as needed */
 }
 
 .smart-memo-red-dot-container {
@@ -259,34 +258,37 @@ body .modal-container .modal .smart-memo-modal-button:focus-visible {
 .smart-memo-status-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
     cursor: pointer;
 }
 
 .smart-memo-status-main {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+    height: 100%;
 }
 
-.smart-memo-timer {
+.smart-memo-status-main .smart-memo-timer {
     font-family: monospace;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
-    padding: 2px 6px;
-    border-radius: 3px;
+    padding: 0 4px;
+    border-radius: 2px;
     background: var(--background-modifier-border);
     cursor: pointer;
     transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    line-height: 1;
 }
 
-.smart-memo-timer:hover {
+.smart-memo-status-main .smart-memo-timer:hover {
     background: var(--background-modifier-hover);
 }
 
 .smart-memo-status-btn {
-    width: 20px;
-    height: 20px;
+    width: 14px;
+    height: 14px;
     border: none;
     border-radius: 3px;
     background: transparent;
