@@ -1,9 +1,11 @@
 import { App, Editor, MarkdownView, normalizePath, Notice, Plugin, PluginSettingTab, requestUrl,  RequestUrlParam, Setting, TAbstractFile, TFile, MarkdownPostProcessorContext } from 'obsidian';
 const {SmartChatModel} = require('smart-chat-model');
 
-
-import { SmartMemosAudioRecordModal } from './SmartMemosAudioRecordModal'; // Update with the correct path
+import { SmartMemosAudioRecordModal } from './SmartMemosAudioRecordModal';
+import { SmartMemosStatusBar } from './SmartMemosStatusBar';
 import { saveFile } from 'Utils';
+import { AIProvider } from './providers/AIProvider';
+import { ProviderFactory, ProviderType } from './providers/ProviderFactory';
 
 interface AudioPluginSettings {
 	model: string;
@@ -13,6 +15,16 @@ interface AudioPluginSettings {
     recordingFilePath: string;
     keepAudio: boolean;
     includeAudioFileLink : boolean;
+    
+    // New settings
+    recordingInterface: 'modal' | 'statusbar' | 'floating';
+    aiProvider: ProviderType;
+    rememberTargetNote: 'remember' | 'no' | 'ask';
+    statusBarPosition: 'far-left' | 'left' | 'center' | 'right' | 'far-right';
+    
+    // Provider-specific settings
+    geminiApiKey: string;
+    geminiModel: string;
 }
 
 let DEFAULT_SETTINGS: AudioPluginSettings = {
@@ -22,20 +34,33 @@ let DEFAULT_SETTINGS: AudioPluginSettings = {
     includeTranscript: true,
     recordingFilePath: '',
     keepAudio: true,
-    includeAudioFileLink: false
+    includeAudioFileLink: false,
+    
+    // New default settings
+    recordingInterface: 'modal',
+    aiProvider: 'openai',
+    rememberTargetNote: 'ask',
+    statusBarPosition: 'right',
+    
+    // Provider defaults
+    geminiApiKey: '',
+    geminiModel: 'gemini-2.0-flash-exp'
 }
 
 const MODELS: string[] = [
-	'gpt-3.5-turbo-16k',
-	'gpt-3.5-turbo-0613',
-	'text-davinci-003',
-	'text-davinci-002',
-	'code-davinci-002',
-	'code-davinci-001',
-	'gpt-4-0613',
-	'gpt-4-32k-0613',
-	'gpt-4o',
-    'gpt-4o-mini'
+    'gpt-5',
+    'gpt-5-mini',
+    'gpt-5-nano',
+    'gpt-4.5',
+    'gpt-4.1',
+    'gpt-4.1-mini',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+    'gpt-4',
+    'gpt-3.5-turbo',
+    'o1-preview',
+    'o1-mini'
 ];
   
 
@@ -49,6 +74,8 @@ export default class SmartMemosPlugin extends Plugin {
     appJsonObj : any;
 
     private audioContext: AudioContext;
+    public aiProvider: AIProvider;
+    public statusBar: SmartMemosStatusBar | null = null;
 
 
     // Add a new property to store the audio file
@@ -62,6 +89,14 @@ export default class SmartMemosPlugin extends Plugin {
         this.appJsonObj = JSON.parse(app_json);
 
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        
+        // Initialize AI provider
+        this.initializeAIProvider();
+        
+        // Initialize status bar if needed
+        if (this.settings.recordingInterface === 'statusbar') {
+            this.initializeStatusBar();
+        }
 
 
 		this.addCommand({
@@ -76,9 +111,7 @@ export default class SmartMemosPlugin extends Plugin {
             id: 'record-smart-memo',
             name: 'Record smart memo',
             editorCallback: async (editor: Editor, view: MarkdownView) => {
-                // Open the audio recorder and store the recorded audio
-                this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this), this.settings).open();
-
+                await this.startRecording();
             }
         });
 
@@ -118,17 +151,109 @@ export default class SmartMemosPlugin extends Plugin {
          // Add the audio recorder ribbon
          // Update the callback for the audio recorder ribbon
         this.addRibbonIcon('microphone', 'Record smart memo', async (evt: MouseEvent) => {
-            // Open the audio recorder and store the recorded audio
-            this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this), this.settings).open();
-
+            await this.startRecording();
         });
 
 		this.addSettingTab(new SmartMemosSettingTab(this.app, this));
 		
 	}
 
+    public initializeAIProvider() {
+        const providerSettings = ProviderFactory.getProviderSettings(this.settings.aiProvider, this.settings);
+        this.aiProvider = ProviderFactory.createProvider({
+            type: this.settings.aiProvider,
+            settings: providerSettings,
+            audioContext: this.audioContext
+        });
+    }
+    
+    public initializeStatusBar() {
+        if (this.statusBar) {
+            this.statusBar.unload();
+        }
+        
+        // Remove any existing status bar elements from this plugin
+        this.removeExistingStatusBarElements();
+        
+        const statusBarEl = this.addStatusBarItemAtPosition();
+        this.statusBar = new SmartMemosStatusBar(
+            this.app,
+            statusBarEl,
+            this.handleAudioRecording.bind(this),
+            {
+                keepAudio: this.settings.keepAudio,
+                includeAudioFileLink: this.settings.includeAudioFileLink,
+                rememberTargetNote: this.settings.rememberTargetNote
+            }
+        );
+    }
+    
+    private removeExistingStatusBarElements() {
+        const statusBar = document.querySelector('.status-bar');
+        if (statusBar) {
+            const existingElements = statusBar.querySelectorAll('.smart-memo-status-bar');
+            existingElements.forEach(el => el.remove());
+        }
+    }
+    
+    private addStatusBarItemAtPosition(): HTMLElement {
+        const statusBar = document.querySelector('.status-bar');
+        if (!statusBar) {
+            return this.addStatusBarItem(); // Fallback to default
+        }
+        
+        const statusBarEl = document.createElement('div');
+        statusBarEl.addClass('status-bar-item');
+        
+        let insertIndex = 0;
+        const statusBarItems = Array.from(statusBar.children);
+        
+        switch (this.settings.statusBarPosition) {
+            case 'far-left':
+                insertIndex = 0;
+                break;
+            case 'left':
+                // Find sync button and insert before it
+                const syncIndex = statusBarItems.findIndex(el => 
+                    el.querySelector('[data-tooltip*="sync"]') || 
+                    el.querySelector('.sync-status-bar') ||
+                    el.textContent?.includes('sync')
+                );
+                insertIndex = syncIndex > 0 ? syncIndex : Math.floor(statusBarItems.length * 0.3);
+                break;
+            case 'center':
+                insertIndex = Math.floor(statusBarItems.length / 2);
+                break;
+            case 'right':
+                insertIndex = Math.floor(statusBarItems.length * 0.8);
+                break;
+            case 'far-right':
+            default:
+                insertIndex = statusBarItems.length;
+                break;
+        }
+        
+        if (insertIndex >= statusBarItems.length) {
+            statusBar.appendChild(statusBarEl);
+        } else {
+            statusBar.insertBefore(statusBarEl, statusBarItems[insertIndex]);
+        }
+        
+        return statusBarEl;
+    }
+    
+    private async startRecording() {
+        if (this.settings.recordingInterface === 'statusbar') {
+            // Status bar handles its own recording
+            new Notice('Use the status bar controls to manage recording');
+        } else {
+            // Use modal (default behavior)
+            this.audioFile = await new SmartMemosAudioRecordModal(this.app, this.handleAudioRecording.bind(this), this.settings).open();
+        }
+    }
+
     // Add a new method to handle the audio recording and processing
-    async handleAudioRecording(audioFile: Blob, transcribe: boolean, keepAudio: boolean, includeAudioFileLink: boolean) {
+    async handleAudioRecording(audioFile: Blob, transcribe: boolean, keepAudio: boolean, includeAudioFileLink: boolean, targetNote?: TFile) {
         try {
             console.log('Handling audio recording:', audioFile);
 
@@ -164,7 +289,7 @@ export default class SmartMemosPlugin extends Plugin {
 
             // Transcribe the audio file if the transcribe parameter is true
             if (transcribe) {
-                this.transcribeRecording(file);
+                this.transcribeRecording(file, targetNote);
             }
 
         } catch (error) {
@@ -174,14 +299,57 @@ export default class SmartMemosPlugin extends Plugin {
     }
 
     // Add a new method to transcribe the audio file and generate text
-    async transcribeRecording(audioFile: TFile) {
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (!activeView) {
-            console.error('No active Markdown view found.');
-            return;
+    async transcribeRecording(audioFile: TFile, targetNote?: TFile) {
+        let targetView: MarkdownView | null = null;
+        let targetEditor: Editor | null = null;
+        
+        if (targetNote) {
+            // Try to find existing view for target note
+            const leaves = this.app.workspace.getLeavesOfType('markdown');
+            for (const leaf of leaves) {
+                const view = leaf.view as MarkdownView;
+                if (view.file && view.file.path === targetNote.path) {
+                    targetView = view;
+                    targetEditor = view.editor;
+                    break;
+                }
+            }
+            
+            // If no existing view, open the target note
+            if (!targetView) {
+                const leaf = this.app.workspace.getLeaf(false);
+                await leaf.openFile(targetNote);
+                targetView = leaf.view as MarkdownView;
+                targetEditor = targetView.editor;
+            }
+        } else {
+            // Fall back to current active view
+            targetView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (!targetView) {
+                console.error('No active Markdown view found.');
+                return;
+            }
+            targetEditor = targetView.editor;
         }
 
-        const editor = activeView.editor;
+        if (!targetEditor) {
+            console.error('Could not get editor for target note.');
+            return;
+        }
+        
+        // Determine insertion point based on whether we're using a target note
+        let insertionLine: number;
+        if (targetNote) {
+            // When using target note, append to bottom of file
+            insertionLine = targetEditor.lastLine();
+            // Position cursor at end of last line to ensure proper appending
+            const lastLineContent = targetEditor.getLine(insertionLine);
+            targetEditor.setCursor(insertionLine, lastLineContent.length);
+        } else {
+            // Normal behavior: use current cursor position
+            insertionLine = targetEditor.getCursor('to').line;
+        }
+        
         this.app.vault.readBinary(audioFile).then((audioBuffer) => {
             if (this.writing) {
                 new Notice('Generator is already in progress.');
@@ -190,11 +358,11 @@ export default class SmartMemosPlugin extends Plugin {
             this.writing = true;
             new Notice("Generating transcript...");
             const fileType = audioFile.extension;
-            this.generateTranscript(audioBuffer, fileType).then((result) => {
+            this.aiProvider.transcribe(audioBuffer, this.audioContext).then((result) => {
                 this.transcript = result;
                 const prompt = this.settings.prompt + result;
                 new Notice('Transcript generated...');
-                this.generateText(prompt, editor , editor.getCursor('to').line);
+                this.generateTextWithProvider(prompt, targetEditor!, insertionLine);
                 //if keepAudio is false and delete the audio file if so
                 if (!this.settings.keepAudio) {
                     this.app.vault.delete(audioFile); // Delete the audio file
@@ -243,11 +411,11 @@ export default class SmartMemosPlugin extends Plugin {
                         }
                         this.writing = true;
                         new Notice("Generating transcript...");
-                        this.generateTranscript(audioBuffer, fileType).then((result) => {
+                        this.aiProvider.transcribe(audioBuffer, this.audioContext).then((result) => {
                             this.transcript = result;
                             const prompt = this.settings.prompt + result;
                             new Notice('Transcript generated...');
-                            this.generateText(prompt, editor, editor.getCursor('to').line);
+                            this.generateTextWithProvider(prompt, editor, editor.getCursor('to').line);
                         }).catch(error => {
                             console.warn(error.message);
                             new Notice(error.message);
@@ -297,188 +465,9 @@ export default class SmartMemosPlugin extends Plugin {
         throw new Error('File not found');
     }
     
-    async generateTranscript(audioBuffer: ArrayBuffer, filetype: string): Promise<string> {
-        if (this.settings.apiKey.length <= 1) throw new Error('OpenAI API Key is not provided.');
-    
-        try {
-            // Step 1: Decode Audio Data
-            const decodedAudioData = await this.audioContext.decodeAudioData(audioBuffer);
-    
-            // Optional: Downsample the audio to 16 kHz for Whisper
-            const targetSampleRate = 16000;
-            const downsampledAudioBuffer = await this.downsampleAudioBuffer(decodedAudioData, targetSampleRate);
-    
-            // Step 2: Split Audio Buffer into chunks less than 25 MB
-            const chunkDuration = 600; // in seconds (10 minutes)
-            const audioChunks = this.splitAudioBuffer(downsampledAudioBuffer, chunkDuration);
-    
-            let results: string[] = [];
-    
-            for (let i = 0; i < audioChunks.length; i++) {
-                new Notice(`Transcribing chunk #${i + 1} of ${audioChunks.length}...`);
-    
-                // Step 3: Encode Chunk to WAV
-                const wavArrayBuffer = this.encodeAudioBufferToWav(audioChunks[i]);
-    
-                // Check the size of the encoded WAV file
-                const sizeInMB = wavArrayBuffer.byteLength / (1024 * 1024);
-                if (sizeInMB > 24) {
-                    throw new Error('Chunk size exceeds 25 MB limit.');
-                }
-    
-                // Step 4: Send Chunk to Whisper API
-                const formData = new FormData();
-                const blob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
-                formData.append('file', blob, 'audio.wav');
-                formData.append('model', 'whisper-1');
-    
-                const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + this.settings.apiKey
-                    },
-                    body: formData
-                });
-    
-                const result = await response.json();
-                if (response.ok && result.text) {
-                    results.push(result.text);
-                } else {
-                    throw new Error(`Error: ${result.error.message}`);
-                }
-    
-                // Wait a bit between requests to avoid rate limits
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-    
-            return results.join(' ');
-    
-        } catch (error) {
-            console.error('Transcription failed:', error);
-            if (error.message.includes('401')) {
-                throw new Error('OpenAI API Key is not valid.');
-            } else if (error.message.includes('400')) {
-                throw new Error('Bad Request. Please check the format of the request.');
-            } else {
-                throw error;
-            }
-        }
-    }
 
-    async downsampleAudioBuffer(audioBuffer: AudioBuffer, targetSampleRate: number): Promise<AudioBuffer> {
-        const numberOfChannels = audioBuffer.numberOfChannels;
-        const duration = audioBuffer.duration;
-    
-        const offlineContext = new OfflineAudioContext(numberOfChannels, targetSampleRate * duration, targetSampleRate);
-    
-        // Create buffer source
-        const bufferSource = offlineContext.createBufferSource();
-        bufferSource.buffer = audioBuffer;
-    
-        // Connect the buffer source to the offline context destination
-        bufferSource.connect(offlineContext.destination);
-    
-        // Start rendering
-        bufferSource.start(0);
-        const renderedBuffer = await offlineContext.startRendering();
-    
-        return renderedBuffer;
-    }
-    
-    splitAudioBuffer(audioBuffer: AudioBuffer, chunkDuration: number): AudioBuffer[] {
-        const numberOfChannels = audioBuffer.numberOfChannels;
-        const sampleRate = audioBuffer.sampleRate;
-        const totalSamples = audioBuffer.length;
-    
-        const chunks: AudioBuffer[] = [];
-        let offset = 0;
-        const samplesPerChunk = Math.floor(chunkDuration * sampleRate);
-    
-        while (offset < totalSamples) {
-            const chunkSamples = Math.min(samplesPerChunk, totalSamples - offset);
-            const chunkBuffer = new AudioBuffer({
-                length: chunkSamples,
-                numberOfChannels: numberOfChannels,
-                sampleRate: sampleRate,
-            });
-    
-            for (let channel = 0; channel < numberOfChannels; channel++) {
-                const channelData = audioBuffer.getChannelData(channel).subarray(offset, offset + chunkSamples);
-                chunkBuffer.copyToChannel(channelData, channel, 0);
-            }
-    
-            chunks.push(chunkBuffer);
-            offset += chunkSamples;
-        }
-    
-        return chunks;
-    }
-    
-    encodeAudioBufferToWav(audioBuffer: AudioBuffer): ArrayBuffer {
-        const numChannels = audioBuffer.numberOfChannels;
-        const sampleRate = audioBuffer.sampleRate;
-        const format = 1; // PCM
-        const bitDepth = 16;
-    
-        const numSamples = audioBuffer.length * numChannels;
-        const buffer = new ArrayBuffer(44 + numSamples * 2);
-        const view = new DataView(buffer);
-    
-        /* RIFF identifier */
-        this.writeString(view, 0, 'RIFF');
-        /* file length */
-        view.setUint32(4, 36 + numSamples * 2, true);
-        /* RIFF type */
-        this.writeString(view, 8, 'WAVE');
-        /* format chunk identifier */
-        this.writeString(view, 12, 'fmt ');
-        /* format chunk length */
-        view.setUint32(16, 16, true);
-        /* sample format (raw) */
-        view.setUint16(20, format, true);
-        /* channel count */
-        view.setUint16(22, numChannels, true);
-        /* sample rate */
-        view.setUint32(24, sampleRate, true);
-        /* byte rate (sample rate * block align) */
-        view.setUint32(28, sampleRate * numChannels * bitDepth / 8, true);
-        /* block align (channel count * bytes per sample) */
-        view.setUint16(32, numChannels * bitDepth / 8, true);
-        /* bits per sample */
-        view.setUint16(34, bitDepth, true);
-        /* data chunk identifier */
-        this.writeString(view, 36, 'data');
-        /* data chunk length */
-        view.setUint32(40, numSamples * 2, true);
-    
-        // Write interleaved data
-        let offset = 44;
-        for (let i = 0; i < audioBuffer.length; i++) {
-            for (let channel = 0; channel < numChannels; channel++) {
-                let sample = audioBuffer.getChannelData(channel)[i];
-                // Clip sample
-                sample = Math.max(-1, Math.min(1, sample));
-                // Scale to 16-bit integer
-                sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-                view.setInt16(offset, sample, true);
-                offset += 2;
-            }
-        }
-    
-        return buffer;
-    }
-    
-    writeString(view: DataView, offset: number, string: string): void {
-        for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
-    }
-    
-    
-
-	async generateText(prompt: string, editor: Editor, currentLn: number, contextPrompt?: string) {
+	async generateTextWithProvider(prompt: string, editor: Editor, currentLn: number, contextPrompt?: string) {
         if (prompt.length < 1) throw new Error('Cannot find prompt.');
-        if ( this.settings.apiKey.length <= 1) throw new Error('OpenAI API Key is not provided.');
 
 		prompt = prompt + '.';
 
@@ -511,15 +500,26 @@ export default class SmartMemosPlugin extends Plugin {
             }
         };
 
-        const smart_chat_model = new SmartChatModel(
-            mock_env,
-            "openai",
-            {
-                api_key: this.settings.apiKey,
-                model: this.settings.model,
-            }
-        );
-        const resp = await smart_chat_model.complete({messages: messages});
+        try {
+            await this.aiProvider.generateText({
+                messages: messages,
+                onChunk: (chunk: string) => {
+                    editor.setLine(LnToWrite, editor.getLine(LnToWrite) + chunk);
+                    if(chunk.includes('\n')){
+                        LnToWrite = this.getNextNewLine(editor, LnToWrite);
+                    }
+                },
+                onComplete: (final_resp: string) => {
+                    LnToWrite = this.getNextNewLine(editor, lastLine);
+                    if(this.settings.includeTranscript) {
+                        editor.setLine(LnToWrite, editor.getLine(LnToWrite) + '\n# Transcript\n' + this.transcript);
+                    }
+                }
+            });
+        } catch (error: any) {
+            console.error('Text generation failed:', error);
+            new Notice(`Text generation failed: ${error.message}`);
+        }
         
         this.writing = false;
     }
@@ -546,33 +546,91 @@ class SmartMemosSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
+		// Recording Interface Setting
 		new Setting(containerEl)
-			.setName('OpenAI api key')
-			.setDesc('Ex: sk-as123mkqwenjasdasdj12...')
-			.addText(text => text
-				.setPlaceholder(DEFAULT_SETTINGS.apiKey)
-				.setValue(this.plugin.settings.apiKey)
-				.onChange(async (value) => {
-					// console.log('API Key: ' + value);
-					this.plugin.settings.apiKey = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Model')
-			.setDesc('Select the model to use for note-generation')
+			.setName('Recording Interface')
+			.setDesc('Choose how you want to interact with recording controls')
 			.addDropdown(dropdown => {
-				dropdown.addOptions(MODELS.reduce((models: {[key: string]: string}, model) => {
-					models[model] = model;
-					return models;
-				}, {}));
-				dropdown.setValue(this.plugin.settings.model);
-				dropdown.onChange(async (value) => {
-					// console.log('Model: ' + value);
-					this.plugin.settings.model = value;
+				dropdown.addOption('modal', 'Modal (Default)');
+				dropdown.addOption('statusbar', 'Status Bar');
+				dropdown.setValue(this.plugin.settings.recordingInterface);
+				dropdown.onChange(async (value: 'modal' | 'statusbar' | 'floating') => {
+					this.plugin.settings.recordingInterface = value;
 					await this.plugin.saveSettings();
+					
+					// Reinitialize interface
+					if (value === 'statusbar') {
+						this.plugin.initializeStatusBar();
+					} else if (this.plugin.statusBar) {
+						this.plugin.statusBar.unload();
+						this.plugin.statusBar = null;
+					}
 				});
 			});
+
+		new Setting(containerEl)
+			.setName('Remember Target Note')
+			.setDesc('Choose how to handle recording to a specific note when using status bar interface')
+			.addDropdown(dropdown => {
+				dropdown.addOption('remember', 'Always Remember Current Note');
+				dropdown.addOption('ask', 'Ask Each Time');
+				dropdown.addOption('no', 'Never Remember (Insert at Cursor)');
+				dropdown.setValue(this.plugin.settings.rememberTargetNote);
+				dropdown.onChange(async (value: 'remember' | 'ask' | 'no') => {
+					this.plugin.settings.rememberTargetNote = value;
+					await this.plugin.saveSettings();
+					
+					// Update status bar with new settings
+					if (this.plugin.statusBar) {
+						this.plugin.statusBar.updateSettings({
+							keepAudio: this.plugin.settings.keepAudio,
+							includeAudioFileLink: this.plugin.settings.includeAudioFileLink,
+							rememberTargetNote: this.plugin.settings.rememberTargetNote
+						});
+					}
+				});
+			});
+
+		new Setting(containerEl)
+			.setName('Status Bar Position')
+			.setDesc('Choose where to position the recording controls in the status bar')
+			.addDropdown(dropdown => {
+				dropdown.addOption('far-left', 'Far Left');
+				dropdown.addOption('left', 'Left (Before Sync)');
+				dropdown.addOption('center', 'Center');
+				dropdown.addOption('right', 'Right');
+				dropdown.addOption('far-right', 'Far Right (Default)');
+				dropdown.setValue(this.plugin.settings.statusBarPosition);
+				dropdown.onChange(async (value: 'far-left' | 'left' | 'center' | 'right' | 'far-right') => {
+					this.plugin.settings.statusBarPosition = value;
+					await this.plugin.saveSettings();
+					
+					// Reinitialize status bar to apply new position
+					if (this.plugin.settings.recordingInterface === 'statusbar') {
+						this.plugin.initializeStatusBar();
+					}
+				});
+			});
+
+		// AI Provider Setting
+		new Setting(containerEl)
+			.setName('AI Provider')
+			.setDesc('Choose your AI provider for transcription and text generation')
+			.addDropdown(dropdown => {
+				dropdown.addOption('openai', 'OpenAI');
+				dropdown.addOption('gemini', 'Google Gemini');
+				dropdown.setValue(this.plugin.settings.aiProvider);
+				dropdown.onChange(async (value: 'openai' | 'gemini') => {
+					this.plugin.settings.aiProvider = value;
+					await this.plugin.saveSettings();
+					this.plugin.initializeAIProvider();
+					this.display(); // Refresh to show provider-specific settings
+				});
+			});
+
+		// Provider-specific settings
+		this.addProviderSettings(containerEl);
+
 
         new Setting(containerEl)
 			.setName('Custom transcription-to-notes prompt')
@@ -630,5 +688,90 @@ class SmartMemosSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
+	}
+
+	private addProviderSettings(containerEl: HTMLElement) {
+		if (this.plugin.settings.aiProvider === 'openai') {
+			new Setting(containerEl)
+				.setName('OpenAI API Key')
+				.setDesc('Your OpenAI API key (supports both transcription and text generation)')
+				.addText(text => text
+					.setPlaceholder('sk-...')
+					.setValue(this.plugin.settings.apiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.apiKey = value;
+						await this.plugin.saveSettings();
+						this.plugin.initializeAIProvider();
+					}));
+
+			new Setting(containerEl)
+				.setName('OpenAI Model')
+				.setDesc('Select the OpenAI model to use for text generation')
+				.addDropdown(dropdown => {
+					dropdown.addOptions(MODELS.reduce((models: {[key: string]: string}, model) => {
+						models[model] = model;
+						return models;
+					}, {}));
+					dropdown.setValue(this.plugin.settings.model);
+					dropdown.onChange(async (value) => {
+						this.plugin.settings.model = value;
+						await this.plugin.saveSettings();
+						this.plugin.initializeAIProvider();
+					});
+				});
+
+		} else if (this.plugin.settings.aiProvider === 'gemini') {
+			new Setting(containerEl)
+				.setName('Google Gemini API Key')
+				.setDesc('Your Google Gemini API key (supports both transcription and text generation)')
+				.addText(text => text
+					.setPlaceholder('AIza...')
+					.setValue(this.plugin.settings.geminiApiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.geminiApiKey = value;
+						await this.plugin.saveSettings();
+						this.plugin.initializeAIProvider();
+					}));
+
+			new Setting(containerEl)
+				.setName('Gemini Model')
+				.setDesc('Select the Gemini model to use for transcription and text generation')
+				.addDropdown(dropdown => {
+					const geminiModels = {
+						'gemini-2.0-flash-exp': 'Gemini 2.0 Flash (Experimental)',
+						'gemini-2.0-flash-thinking-exp-1219': 'Gemini 2.0 Flash Thinking (Experimental)',
+						'gemini-1.5-pro': 'Gemini 1.5 Pro',
+						'gemini-1.5-flash': 'Gemini 1.5 Flash',
+						'gemini-1.5-flash-8b': 'Gemini 1.5 Flash 8B'
+					};
+					dropdown.addOptions(geminiModels);
+					dropdown.setValue(this.plugin.settings.geminiModel);
+					dropdown.onChange(async (value) => {
+						this.plugin.settings.geminiModel = value;
+						await this.plugin.saveSettings();
+						this.plugin.initializeAIProvider();
+					});
+				});
+
+			// Add test connection button
+			new Setting(containerEl)
+				.setName('Test Connection')
+				.setDesc('Verify your Gemini API key and connection')
+				.addButton(button => {
+					button.setButtonText('Test Connection')
+						.onClick(async () => {
+							try {
+								const isValid = await this.plugin.aiProvider.validateSettings();
+								if (isValid) {
+									new Notice('✅ Gemini API connection successful!');
+								} else {
+									new Notice('❌ Gemini API connection failed. Check your API key.');
+								}
+							} catch (error) {
+								new Notice('❌ Failed to test Gemini API connection');
+							}
+						});
+				});
+		}
 	}
 }
